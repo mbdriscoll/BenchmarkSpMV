@@ -1,6 +1,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cassert>
+#include <cfloat>
 
 extern "C" {
 #include "mmio.h"

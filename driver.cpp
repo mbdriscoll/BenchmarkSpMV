@@ -1,5 +1,8 @@
 #include "driver.h"
 
+static cusparseHandle_t handle = NULL;
+float *answer = NULL;
+
 void
 mm_read(char* filename, HostCsrMatrix **hM, DeviceCsrMatrix **dM) {
     FILE* mmfile = fopen(filename, "r");
@@ -17,6 +20,7 @@ mm_read(char* filename, HostCsrMatrix **hM, DeviceCsrMatrix **dM) {
     int m, n, nnz;
     status = mm_read_mtx_crd_size(mmfile, &m, &n, &nnz);
     assert(status == 0 && "Parsed matrix m, n, and nnz.");
+    printf("- matrix is %d-by-%d with %d nnz.\n", m, n, nnz);
 
     int *coo_rows = (int*) malloc(nnz * sizeof(int));
     int *coo_cols = (int*) malloc(nnz * sizeof(int));
@@ -32,7 +36,7 @@ mm_read(char* filename, HostCsrMatrix **hM, DeviceCsrMatrix **dM) {
     /* Use MKL to convert and sort to CSR matrix. */
     int job[] = {
         2, // job(1)=2 (coo->csr with sorting)
-        0, // job(2)=1 (zero-based indexing for csr matrix)
+        1, // job(2)=1 (one-based indexing for csr matrix)
         1, // job(3)=1 (one-based indexing for coo matrix)
         0, // empty
         nnz, // job(5)=nnz (sets nnz for csr matrix)
@@ -41,6 +45,7 @@ mm_read(char* filename, HostCsrMatrix **hM, DeviceCsrMatrix **dM) {
 
     int info;
     mkl_scsrcoo(job, &m, csr_vals, csr_cols, csr_rows, &nnz, coo_vals, coo_rows, coo_cols, &info);
+    assert(info == 0 && "Converted COO->CSR");
 
     *hM = new HostCsrMatrix(m, n, nnz, csr_rows, csr_cols, csr_vals);
     *dM = new DeviceCsrMatrix(m, n, nnz, csr_rows, csr_cols, csr_vals);
@@ -57,9 +62,65 @@ DeviceCsrMatrix::DeviceCsrMatrix(int m, int n, int nnz, int *h_rows, int *h_cols
         cudaMalloc(&cols, nnz * sizeof(int));
         cudaMalloc(&vals, nnz * sizeof(float));
 
-        cudaMemcpy(rows, h_rows, (m+1)*sizeof(int),  cudaMemcpyHostToDevice);
-        cudaMemcpy(cols, h_cols, nnz*sizeof(int),  cudaMemcpyHostToDevice);
-        cudaMemcpy(vals, h_vals, nnz*sizeof(float),  cudaMemcpyHostToDevice);
+        cudaMemcpy(rows, h_rows, (m+1)*sizeof(int), cudaMemcpyHostToDevice);
+        cudaMemcpy(cols, h_cols, nnz*sizeof(int), cudaMemcpyHostToDevice);
+        cudaMemcpy(vals, h_vals, nnz*sizeof(float), cudaMemcpyHostToDevice);
+
+        cusparseCreateMatDescr(&desc);
+        cusparseSetMatType(desc,CUSPARSE_MATRIX_TYPE_GENERAL);
+        cusparseSetMatIndexBase(desc,CUSPARSE_INDEX_BASE_ONE);
+}
+
+float *
+randvec(int n) {
+    float *v = (float*) malloc(n * sizeof(float));
+    for(int i = 0; i < n; i++)
+        v[i] = rand() / (float) RAND_MAX;
+    return v;
+}
+
+void
+check_vec(int n, float *expected, float *actual) {
+    int errors = 0;
+    for(int i = 0; i < n; i++)
+        if ( fabs(expected[i] - actual[i]) > FLT_EPSILON )
+            errors += 1;
+
+    if (errors)
+        fprintf(stderr, "Found %d/%d errors in answer.\n", errors, n);
+}
+
+double cpuRefSpMV(HostCsrMatrix *M, float *v) {
+    answer = (float*) malloc(M->m * sizeof(float));
+    mkl_scsrgemv((char*)"N", &M->m, M->vals, M->rows, M->cols, v, answer);
+
+    check_vec(M->m, answer, answer);
+    return 1.0;
+}
+
+double gpuRefSpMV(DeviceCsrMatrix *M, float *v_in) {
+    float *dv_in, *dv_out;
+    cudaMalloc(&dv_in, M->n * sizeof(float));
+    cudaMalloc(&dv_out, M->m * sizeof(float));
+    cudaMemcpy(dv_in, v_in, M->n * sizeof(float), cudaMemcpyHostToDevice);
+
+    cusparseStatus_t status;
+    cusparseOperation_t op = CUSPARSE_OPERATION_NON_TRANSPOSE;
+    float alpha = 1.0,
+          beta = 0.0;
+    status = cusparseScsrmv(handle, op, M->m, M->n, M->nnz, &alpha, M->desc,
+		    M->vals, M->rows, M->cols, dv_in, &beta, dv_out);
+    assert(status == CUSPARSE_STATUS_SUCCESS);
+
+    float *v_out = (float*) malloc(M->m * sizeof(float));
+    cudaMemcpy(v_out, dv_out, M->m * sizeof(float), cudaMemcpyDeviceToHost);
+    check_vec(M->m, answer, v_out);
+
+    return 1.0;
+}
+
+double MyGpuSpMV(DeviceCsrMatrix *M, float *v) {
+    return 1.0;
 }
 
 int main(int argc, char* argv[]) {
@@ -73,7 +134,15 @@ int main(int argc, char* argv[]) {
     DeviceCsrMatrix *dM;
     mm_read(argv[1], &hM, &dM);
 
+    float *v = randvec(hM->n);
+
+    cusparseCreate(&handle);
+
     printf("Benchmarking.\n");
+    double cpuRefTime = cpuRefSpMV(hM, v);
+    double gpuRefTime = gpuRefSpMV(dM, v);
+    double myGpuTime = MyGpuSpMV(dM, v);
+    printf("Measured times: %f %f %f\n", cpuRefTime, gpuRefTime, myGpuTime);
 
     printf("Done.\n");
     return 0;
