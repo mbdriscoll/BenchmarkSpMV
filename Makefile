@@ -1,6 +1,6 @@
 default: driver
 
-driver: kernel.o
+driver: mmio.o
 
 %.o: %.cu
 	nvcc -c $< -o $@
