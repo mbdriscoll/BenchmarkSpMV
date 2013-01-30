@@ -19,6 +19,7 @@ spmv(int m, int nnz, const int* M_rows, const int* M_cols, const float* M_vals, 
 
 extern "C" {
 
+#include "driver.h"
 #include <cusparse_v2.h>
 
 cusparseStatus_t
