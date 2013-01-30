@@ -1,5 +1,7 @@
 #include "driver.h"
 
+#define WARM 10
+
 static cusparseHandle_t handle = NULL;
 float *answer = NULL;
 
@@ -94,11 +96,13 @@ double cpuRefSpMV(HostCsrMatrix *M, float *v) {
     answer = (float*) malloc(M->m * sizeof(float));
 
     struct timeval start, end;
-    gettimeofday (&start, NULL);
-    {
-        mkl_scsrgemv((char*)"N", &M->m, M->vals, M->rows, M->cols, v, answer);
+    for(int i = 0; i < WARM; i++) {
+        gettimeofday (&start, NULL);
+        {
+            mkl_scsrgemv((char*)"N", &M->m, M->vals, M->rows, M->cols, v, answer);
+        }
+        gettimeofday (&end, NULL);
     }
-    gettimeofday (&end, NULL);
 
     check_vec(M->m, answer, answer);
 
@@ -117,15 +121,17 @@ double gpuRefSpMV(DeviceCsrMatrix *M, float *v_in) {
           beta = 0.0;
 
     struct timeval start, end;
-    gettimeofday (&start, NULL);
-    {
-        status = cusparseScsrmv(handle, op, M->m, M->n, M->nnz, &alpha, M->desc,
-                M->vals, M->rows, M->cols, dv_in, &beta, dv_out);
-        cudaThreadSynchronize();
+    for(int i = 0; i < WARM; i++) {
+        gettimeofday (&start, NULL);
+        {
+            status = cusparseScsrmv(handle, op, M->m, M->n, M->nnz, &alpha, M->desc,
+                    M->vals, M->rows, M->cols, dv_in, &beta, dv_out);
+            cudaThreadSynchronize();
+        }
+        gettimeofday (&end, NULL);
     }
-    gettimeofday (&end, NULL);
 
-    assert(status == CUSPARSE_STATUS_SUCCESS);
+        assert(status == CUSPARSE_STATUS_SUCCESS);
 
     float *v_out = (float*) malloc(M->m * sizeof(float));
     cudaMemcpy(v_out, dv_out, M->m * sizeof(float), cudaMemcpyDeviceToHost);
@@ -134,15 +140,35 @@ double gpuRefSpMV(DeviceCsrMatrix *M, float *v_in) {
     return (end.tv_sec-start.tv_sec) + 1.e-6*(end.tv_usec - start.tv_usec);
 }
 
-double MyGpuSpMV(DeviceCsrMatrix *M, float *v) {
-    struct timeval start, end;
-    gettimeofday (&start, NULL);
-    {
-    }
-    gettimeofday (&end, NULL);
-    //return (end.tv_sec-start.tv_sec) + 1.e-6*(end.tv_usec - start.tv_usec);
+double MyGpuSpMV(DeviceCsrMatrix *M, float *v_in) {
+    float *dv_in, *dv_out;
+    cudaMalloc(&dv_in, M->n * sizeof(float));
+    cudaMalloc(&dv_out, M->m * sizeof(float));
+    cudaMemcpy(dv_in, v_in, M->n * sizeof(float), cudaMemcpyHostToDevice);
 
-    return 1.0;
+    cusparseStatus_t status;
+    cusparseOperation_t op = CUSPARSE_OPERATION_NON_TRANSPOSE;
+    float alpha = 1.0,
+          beta = 0.0;
+
+    struct timeval start, end;
+    for(int i = 0; i < WARM; i++) {
+        gettimeofday (&start, NULL);
+        {
+            status = cusparseScsrmv(handle, op, M->m, M->n, M->nnz, &alpha, M->desc,
+                    M->vals, M->rows, M->cols, dv_in, &beta, dv_out);
+            cudaThreadSynchronize();
+        }
+        gettimeofday (&end, NULL);
+    }
+
+    assert(status == CUSPARSE_STATUS_SUCCESS);
+
+    float *v_out = (float*) malloc(M->m * sizeof(float));
+    cudaMemcpy(v_out, dv_out, M->m * sizeof(float), cudaMemcpyDeviceToHost);
+    check_vec(M->m, answer, v_out);
+
+    return (end.tv_sec-start.tv_sec) + 1.e-6*(end.tv_usec - start.tv_usec);
 }
 
 int main(int argc, char* argv[]) {
@@ -163,7 +189,7 @@ int main(int argc, char* argv[]) {
     double gpuRefTime = gpuRefSpMV(dM, v);
     double myRefTime = MyGpuSpMV(dM, v);
 
-    double gflop = 2.e-9 * (hM->nnz + 4.0 * hM->m);
+    double gflop = 2.e-9 * hM->nnz;
     double gbytes = 2.e-9 * (hM->nnz * sizeof(float) + hM->nnz * sizeof(int) + hM->m * sizeof(int)
         + (hM->n + hM->m) * sizeof(float));
 

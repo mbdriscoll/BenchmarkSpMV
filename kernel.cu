@@ -8,11 +8,11 @@ spmv(int m, int nnz, const int* M_rows, const int* M_cols, const float* M_vals, 
         return;
 
     register float answer = 0.0;
-    int lb = M_rows[row],
-        ub = M_rows[row+1];
+    int lb = M_rows[row]-1,
+        ub = M_rows[row+1]-1;
 
     for(int offset = lb; offset < ub; offset++)
-    answer += M_vals[offset] * V_in[ M_cols[offset] ];
+        answer += M_vals[offset] * V_in[ M_cols[offset]-1 ];
 
     V_out[row] = answer;
 }
