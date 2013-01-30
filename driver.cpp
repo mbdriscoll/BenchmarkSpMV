@@ -83,7 +83,7 @@ void
 check_vec(int n, float *expected, float *actual) {
     int errors = 0;
     for(int i = 0; i < n; i++)
-        if ( fabs(expected[i] - actual[i]) > FLT_EPSILON )
+        if ( fabs(expected[i] - actual[i]) > 2.0*FLT_EPSILON )
             errors += 1;
 
     if (errors)
@@ -92,10 +92,17 @@ check_vec(int n, float *expected, float *actual) {
 
 double cpuRefSpMV(HostCsrMatrix *M, float *v) {
     answer = (float*) malloc(M->m * sizeof(float));
-    mkl_scsrgemv((char*)"N", &M->m, M->vals, M->rows, M->cols, v, answer);
+
+    struct timeval start, end;
+    gettimeofday (&start, NULL);
+    {
+        mkl_scsrgemv((char*)"N", &M->m, M->vals, M->rows, M->cols, v, answer);
+    }
+    gettimeofday (&end, NULL);
 
     check_vec(M->m, answer, answer);
-    return 1.0;
+
+    return (end.tv_sec-start.tv_sec) + 1.e-6*(end.tv_usec - start.tv_usec);
 }
 
 double gpuRefSpMV(DeviceCsrMatrix *M, float *v_in) {
@@ -108,18 +115,33 @@ double gpuRefSpMV(DeviceCsrMatrix *M, float *v_in) {
     cusparseOperation_t op = CUSPARSE_OPERATION_NON_TRANSPOSE;
     float alpha = 1.0,
           beta = 0.0;
-    status = cusparseScsrmv(handle, op, M->m, M->n, M->nnz, &alpha, M->desc,
-		    M->vals, M->rows, M->cols, dv_in, &beta, dv_out);
+
+    struct timeval start, end;
+    gettimeofday (&start, NULL);
+    {
+        status = cusparseScsrmv(handle, op, M->m, M->n, M->nnz, &alpha, M->desc,
+                M->vals, M->rows, M->cols, dv_in, &beta, dv_out);
+        cudaThreadSynchronize();
+    }
+    gettimeofday (&end, NULL);
+
     assert(status == CUSPARSE_STATUS_SUCCESS);
 
     float *v_out = (float*) malloc(M->m * sizeof(float));
     cudaMemcpy(v_out, dv_out, M->m * sizeof(float), cudaMemcpyDeviceToHost);
     check_vec(M->m, answer, v_out);
 
-    return 1.0;
+    return (end.tv_sec-start.tv_sec) + 1.e-6*(end.tv_usec - start.tv_usec);
 }
 
 double MyGpuSpMV(DeviceCsrMatrix *M, float *v) {
+    struct timeval start, end;
+    gettimeofday (&start, NULL);
+    {
+    }
+    gettimeofday (&end, NULL);
+    //return (end.tv_sec-start.tv_sec) + 1.e-6*(end.tv_usec - start.tv_usec);
+
     return 1.0;
 }
 
@@ -135,15 +157,23 @@ int main(int argc, char* argv[]) {
     mm_read(argv[1], &hM, &dM);
 
     float *v = randvec(hM->n);
-
     cusparseCreate(&handle);
 
-    printf("Benchmarking.\n");
     double cpuRefTime = cpuRefSpMV(hM, v);
     double gpuRefTime = gpuRefSpMV(dM, v);
-    double myGpuTime = MyGpuSpMV(dM, v);
-    printf("Measured times: %f %f %f\n", cpuRefTime, gpuRefTime, myGpuTime);
+    double myRefTime = MyGpuSpMV(dM, v);
 
-    printf("Done.\n");
+    double gflop = 2.e-9 * (hM->nnz + 4.0 * hM->m);
+    double gbytes = 2.e-9 * (hM->nnz * sizeof(float) + hM->nnz * sizeof(int) + hM->m * sizeof(int)
+        + (hM->n + hM->m) * sizeof(float));
+
+    printf("Platform  Time         Gflop/s     %%peak Gbyte/s      %%peak\n");
+    printf("MKL      % 1.8f  % 2.8f  %02.f   %02.8f   %02.f\n", cpuRefTime,
+            gflop/cpuRefTime, 100.0*gflop/cpuRefTime/1345.0 , gbytes/cpuRefTime, 100.0*gbytes/cpuRefTime/177.4);
+    printf("cuSPARSE % 1.8f  % 2.8f  %02.f   %02.8f   %02.f\n", gpuRefTime,
+            gflop/gpuRefTime, 100.0*gflop/gpuRefTime/1345.0 , gbytes/gpuRefTime, 100.0*gbytes/gpuRefTime/177.4);
+    printf("Custom   % 1.8f  % 2.8f  %02.f   %02.8f   %02.f\n", myRefTime,
+            gflop/myRefTime, 100.0*gflop/myRefTime/1345.0 , gbytes/myRefTime, 100.8*gbytes/myRefTime/177.4);
+
     return 0;
 }

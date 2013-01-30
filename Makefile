@@ -1,5 +1,4 @@
 NVCC = nvcc
-CXX = nvcc
 CC = nvcc
 
 CXXFLAGS = -O3 -g -I/usr/local/cuda-5.0/include -m64 -I$(MKLROOT)/include

@@ -3,6 +3,8 @@
 #include <cassert>
 #include <cfloat>
 
+#include <sys/time.h>
+
 extern "C" {
 #include "mmio.h"
 #include <mkl_spblas.h>
