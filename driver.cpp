@@ -195,8 +195,11 @@ int main(int argc, char* argv[]) {
     double myRefTime = MyGpuSpMV(dM, v);
 
     double gflop = 2.e-9 * hM->nnz;
-    double gbytes = 2.e-9 * (hM->nnz * sizeof(float) + hM->nnz * sizeof(int) + hM->m * sizeof(int)
-        + (hM->n + hM->m) * sizeof(float));
+    double gbytes = 2.e-9 * (
+            hM->nnz * sizeof(float) + // vals
+            hM->nnz * sizeof(int) + // cols
+            hM->m * sizeof(int) + // rows
+            (hM->n + hM->m) * sizeof(float)); // vectors
 
     printf("Platform  Time         Gflops/s    %%peak Gbytes/s     %%peak\n");
     printf("MKL      % 1.8f  % 2.8f  %02.f   %02.8f   %02.f\n", cpuRefTime,
