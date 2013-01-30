@@ -169,7 +169,7 @@ int main(int argc, char* argv[]) {
 
     printf("Platform  Time         Gflop/s     %%peak Gbyte/s      %%peak\n");
     printf("MKL      % 1.8f  % 2.8f  %02.f   %02.8f   %02.f\n", cpuRefTime,
-            gflop/cpuRefTime, 100.0*gflop/cpuRefTime/1345.0 , gbytes/cpuRefTime, 100.0*gbytes/cpuRefTime/177.4);
+            gflop/cpuRefTime, 100.0*gflop/cpuRefTime/2.67 , gbytes/cpuRefTime, 100.0*gbytes/cpuRefTime/25.6);
     printf("cuSPARSE % 1.8f  % 2.8f  %02.f   %02.8f   %02.f\n", gpuRefTime,
             gflop/gpuRefTime, 100.0*gflop/gpuRefTime/1345.0 , gbytes/gpuRefTime, 100.0*gbytes/gpuRefTime/177.4);
     printf("Custom   % 1.8f  % 2.8f  %02.f   %02.8f   %02.f\n", myRefTime,
