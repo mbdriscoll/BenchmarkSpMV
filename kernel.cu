@@ -1,4 +1,4 @@
-#define THREADS_PER_BLOCK 16
+#define THREADS_PER_BLOCK 128
 
 __global__ void
 spmv(int m, int nnz, const int* M_rows, const int* M_cols, const float* M_vals, const float* V_in, float* V_out)

@@ -38,3 +38,13 @@ class DeviceCsrMatrix : public CsrMatrix {
     DeviceCsrMatrix(int m, int n, int nnz, int *rows, int *cols, float *vals);
 };
 
+extern "C" {
+cusparseStatus_t
+my_cusparseScsrmv(cusparseHandle_t handle, cusparseOperation_t transA,
+    int m, int n, int nnz, float* alpha,
+    cusparseMatDescr_t descrA,
+    const float *csrValA,
+    const int *csrRowPtrA, const int *csrColIndA,
+    const float *x, float* beta,
+    float *y );
+}

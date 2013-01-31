@@ -1,6 +1,6 @@
 #include "driver.h"
 
-#define NITER 100000
+#define NITER 100
 
 static cusparseHandle_t handle = NULL;
 float *answer = NULL;
@@ -143,6 +143,17 @@ double gpuRefSpMV(DeviceCsrMatrix *M, float *v_in) {
     return elapsed / (double) NITER;
 }
 
+extern "C" {
+cusparseStatus_t
+my_cusparseScsrmv(cusparseHandle_t handle, cusparseOperation_t transA,
+    int m, int n, int nnz, float* alpha,
+    cusparseMatDescr_t descrA,
+    const float *csrValA,
+    const int *csrRowPtrA, const int *csrColIndA,
+    const float *x, float* beta,
+    float *y );
+}
+
 double MyGpuSpMV(DeviceCsrMatrix *M, float *v_in) {
     float *dv_in, *dv_out;
     cudaMalloc(&dv_in, M->n * sizeof(float));
@@ -159,7 +170,7 @@ double MyGpuSpMV(DeviceCsrMatrix *M, float *v_in) {
     for(int i = 0; i < NITER; i++) {
         gettimeofday (&start, NULL);
         {
-            status = cusparseScsrmv(handle, op, M->m, M->n, M->nnz, &alpha, M->desc,
+            status = my_cusparseScsrmv(handle, op, M->m, M->n, M->nnz, &alpha, M->desc,
                     M->vals, M->rows, M->cols, dv_in, &beta, dv_out);
             cudaThreadSynchronize();
         }
