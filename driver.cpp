@@ -73,6 +73,17 @@ DeviceCsrMatrix::DeviceCsrMatrix(int m, int n, int nnz, int *h_rows, int *h_cols
         cusparseSetMatIndexBase(desc,CUSPARSE_INDEX_BASE_ONE);
 }
 
+DeviceHybMatrix::DeviceHybMatrix(DeviceCsrMatrix *dM) :
+    CsrMatrix(dM->m, dM->n, dM->nnz, NULL, NULL, NULL) {
+        cusparseCreateMatDescr(&desc);
+        cusparseSetMatType(desc,CUSPARSE_MATRIX_TYPE_GENERAL);
+        cusparseSetMatIndexBase(desc,CUSPARSE_INDEX_BASE_ONE);
+
+        cusparseCreateHybMat(&hybM);
+        cusparseScsr2hyb(handle, dM->m, dM->n, dM->desc, dM->vals, dM->rows, dM->cols, hybM,
+                HYBLEN, CUSPARSE_HYB_PARTITION_USER);
+}
+
 float *
 randvec(int n) {
     float *v = (float*) malloc(n * sizeof(float));
@@ -143,6 +154,38 @@ double gpuRefSpMV(DeviceCsrMatrix *M, float *v_in) {
     return elapsed / (double) NITER;
 }
 
+double hybRefSpMV(DeviceHybMatrix *dM, float *v_in) {
+    float *dv_in, *dv_out;
+    cudaMalloc(&dv_in, dM->n * sizeof(float));
+    cudaMalloc(&dv_out, dM->m * sizeof(float));
+    cudaMemcpy(dv_in, v_in, dM->n * sizeof(float), cudaMemcpyHostToDevice);
+
+    cusparseStatus_t status;
+    cusparseOperation_t op = CUSPARSE_OPERATION_NON_TRANSPOSE;
+    float alpha = 1.0,
+          beta = 0.0;
+
+    double elapsed = 0.0;
+    struct timeval start, end;
+    for(int i = 0; i < NITER; i++) {
+        gettimeofday (&start, NULL);
+        {
+            status = cusparseShybmv(handle, op, &alpha, dM->desc, dM->hybM, dv_in, &beta, dv_out);
+            cudaThreadSynchronize();
+        }
+        gettimeofday (&end, NULL);
+        elapsed += (end.tv_sec-start.tv_sec) + 1.e-6*(end.tv_usec - start.tv_usec);
+    }
+
+        assert(status == CUSPARSE_STATUS_SUCCESS);
+
+    float *v_out = (float*) malloc(dM->m * sizeof(float));
+    cudaMemcpy(v_out, dv_out, dM->m * sizeof(float), cudaMemcpyDeviceToHost);
+    check_vec(dM->m, answer, v_out);
+
+    return elapsed / (double) NITER;
+}
+
 double MyGpuSpMV(DeviceCsrMatrix *M, float *v_in) {
     float *dv_in, *dv_out;
     cudaMalloc(&dv_in, M->n * sizeof(float));
@@ -182,19 +225,24 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
+    cusparseCreate(&handle);
+
     printf("Reading matrix at %s.\n", argv[1]);
     HostCsrMatrix *hM;
     DeviceCsrMatrix *dM;
     mm_read(argv[1], &hM, &dM);
+    DeviceHybMatrix *hybM = new DeviceHybMatrix(dM);
 
     float *v = randvec(hM->n);
-    cusparseCreate(&handle);
 
     double cpuRefTime = cpuRefSpMV(hM, v);
     double gpuRefTime = gpuRefSpMV(dM, v);
+    double hybRefTime = hybRefSpMV(hybM, v);
+#if CUSTOM
     double myRefTime = MyGpuSpMV(dM, v);
+#endif
 
-    double gflop = 2.e-9 * hM->nnz;
+    double gflop = 2.e-9 * 2.0 * hM->nnz;
     double gbytes = 2.e-9 * (
             hM->nnz * sizeof(float) + // vals
             hM->nnz * sizeof(int) + // cols
@@ -205,12 +253,17 @@ int main(int argc, char* argv[]) {
     printf("MKL      % 1.8f  % 2.8f  %02.f   %02.8f   %02.f\n", cpuRefTime,
             gflop/cpuRefTime, 100.0*gflop/cpuRefTime/2.67,
             gbytes/cpuRefTime, 100.0*gbytes/cpuRefTime/25.6);
-    printf("cuSPARSE % 1.8f  % 2.8f  %02.f   %02.8f   %02.f\n", gpuRefTime,
+    printf("cusp CSR % 1.8f  % 2.8f  %02.f   %02.8f   %02.f\n", gpuRefTime,
             gflop/gpuRefTime, 100.0*gflop/gpuRefTime/1345.0,
             gbytes/gpuRefTime, 100.0*gbytes/gpuRefTime/177.4);
+    printf("cusp HYB % 1.8f  % 2.8f  %02.f   %02.8f   %02.f\n", hybRefTime,
+            gflop/hybRefTime, 100.0*gflop/hybRefTime/1345.0,
+            gbytes/hybRefTime, 100.0*gbytes/hybRefTime/177.4);
+#if CUSTOM
     printf("Custom   % 1.8f  % 2.8f  %02.f   %02.8f   %02.f\n", myRefTime,
             gflop/myRefTime, 100.0*gflop/myRefTime/1345.0,
             gbytes/myRefTime, 100.8*gbytes/myRefTime/177.4);
+#endif
 
     return 0;
 }

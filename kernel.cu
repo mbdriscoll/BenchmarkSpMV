@@ -1,9 +1,9 @@
-#define THREADS_PER_BLOCK 16
+#define THREADS_PER_BLOCK 256
 
 __global__ void
 spmv(int m, int nnz, const int* M_rows, const int* M_cols, const float* M_vals, const float* V_in, float* V_out)
 {
-#if 0
+#if 1
     int row = blockIdx.x * blockDim.x;
     if (row >= m)
         return;
@@ -71,7 +71,11 @@ my_cusparseScsrmv(cusparseHandle_t handle, cusparseOperation_t transA,
     const float* V_in = x;
     float* V_out = y;
 
+#if 1
+    int blks = m;
+#else
     int blks = (m + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+#endif
     spmv<<<blks,THREADS_PER_BLOCK>>>(m, nnz, M_rows, M_cols, M_vals, V_in, V_out);
 
     return CUSPARSE_STATUS_SUCCESS;
