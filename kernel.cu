@@ -1,8 +1,9 @@
-#define THREADS_PER_BLOCK 128
+#define THREADS_PER_BLOCK 16
 
 __global__ void
 spmv(int m, int nnz, const int* M_rows, const int* M_cols, const float* M_vals, const float* V_in, float* V_out)
 {
+#if 0
     int row = blockIdx.x * blockDim.x;
     if (row >= m)
         return;
@@ -30,6 +31,24 @@ spmv(int m, int nnz, const int* M_rows, const int* M_cols, const float* M_vals, 
 
     if (threadIdx.x == 0)
         V_out[row] = tmp[0];
+
+#else
+
+    /* Reference implementation */
+    int row = threadIdx.x + blockIdx.x * blockDim.x;
+    if (row >= m)
+        return;
+
+    register float answer = 0.0;
+    int lb = M_rows[row]-1,
+        ub = M_rows[row+1]-1;
+
+    for(int offset = lb; offset < ub; offset++)
+        answer += M_vals[offset] * V_in[ M_cols[offset]-1 ];
+
+    V_out[row] = answer;
+
+#endif
 }
 
 extern "C" {

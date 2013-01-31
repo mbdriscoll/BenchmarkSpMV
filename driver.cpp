@@ -143,17 +143,6 @@ double gpuRefSpMV(DeviceCsrMatrix *M, float *v_in) {
     return elapsed / (double) NITER;
 }
 
-extern "C" {
-cusparseStatus_t
-my_cusparseScsrmv(cusparseHandle_t handle, cusparseOperation_t transA,
-    int m, int n, int nnz, float* alpha,
-    cusparseMatDescr_t descrA,
-    const float *csrValA,
-    const int *csrRowPtrA, const int *csrColIndA,
-    const float *x, float* beta,
-    float *y );
-}
-
 double MyGpuSpMV(DeviceCsrMatrix *M, float *v_in) {
     float *dv_in, *dv_out;
     cudaMalloc(&dv_in, M->n * sizeof(float));
