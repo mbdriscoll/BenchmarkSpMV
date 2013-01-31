@@ -1,6 +1,6 @@
 #include "driver.h"
 
-#define NITER 10000
+#define NITER 100000
 
 static cusparseHandle_t handle = NULL;
 float *answer = NULL;
