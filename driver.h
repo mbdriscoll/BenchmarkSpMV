@@ -1,3 +1,4 @@
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cassert>
@@ -10,12 +11,8 @@ extern "C" {
 #include <mkl_spblas.h>
 }
 
-#include <cuda_runtime.h>
-#include <cusparse_v2.h>
-
 class CsrMatrix {
   public:
-    cusparseMatDescr_t desc;
     int m, n, nnz;
     int *rows;
     int *cols;
@@ -41,16 +38,4 @@ class DeviceCsrMatrix : public CsrMatrix {
 class DeviceHybMatrix : public CsrMatrix {
   public:
     DeviceHybMatrix(DeviceCsrMatrix *Mcsr);
-    cusparseHybMat_t hybM;
 };
-
-extern "C" {
-cusparseStatus_t
-my_cusparseScsrmv(cusparseHandle_t handle, cusparseOperation_t transA,
-    int m, int n, int nnz, float* alpha,
-    cusparseMatDescr_t descrA,
-    const float *csrValA,
-    const int *csrRowPtrA, const int *csrColIndA,
-    const float *x, float* beta,
-    float *y );
-}

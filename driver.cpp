@@ -2,7 +2,6 @@
 
 #define NITER 100
 
-static cusparseHandle_t handle = NULL;
 float *answer = NULL;
 
 void
@@ -60,6 +59,7 @@ mm_read(char* filename, HostCsrMatrix **hM, DeviceCsrMatrix **dM) {
 
 DeviceCsrMatrix::DeviceCsrMatrix(int m, int n, int nnz, int *h_rows, int *h_cols, float *h_vals) :
     CsrMatrix(m, n, nnz, NULL, NULL, NULL) {
+/*
         cudaMalloc(&rows, (m+1) * sizeof(int));
         cudaMalloc(&cols, nnz * sizeof(int));
         cudaMalloc(&vals, nnz * sizeof(float));
@@ -71,10 +71,12 @@ DeviceCsrMatrix::DeviceCsrMatrix(int m, int n, int nnz, int *h_rows, int *h_cols
         cusparseCreateMatDescr(&desc);
         cusparseSetMatType(desc,CUSPARSE_MATRIX_TYPE_GENERAL);
         cusparseSetMatIndexBase(desc,CUSPARSE_INDEX_BASE_ONE);
+*/
 }
 
 DeviceHybMatrix::DeviceHybMatrix(DeviceCsrMatrix *dM) :
     CsrMatrix(dM->m, dM->n, dM->nnz, NULL, NULL, NULL) {
+/*
         cusparseCreateMatDescr(&desc);
         cusparseSetMatType(desc,CUSPARSE_MATRIX_TYPE_GENERAL);
         cusparseSetMatIndexBase(desc,CUSPARSE_INDEX_BASE_ONE);
@@ -82,6 +84,7 @@ DeviceHybMatrix::DeviceHybMatrix(DeviceCsrMatrix *dM) :
         cusparseCreateHybMat(&hybM);
         cusparseScsr2hyb(handle, dM->m, dM->n, dM->desc, dM->vals, dM->rows, dM->cols, hybM,
                 HYBLEN, CUSPARSE_HYB_PARTITION_USER);
+*/
 }
 
 float *
@@ -123,6 +126,7 @@ double cpuRefSpMV(HostCsrMatrix *M, float *v) {
 
 double gpuRefSpMV(DeviceCsrMatrix *M, float *v_in) {
     float *dv_in, *dv_out;
+/*
     cudaMalloc(&dv_in, M->n * sizeof(float));
     cudaMalloc(&dv_out, M->m * sizeof(float));
     cudaMemcpy(dv_in, v_in, M->n * sizeof(float), cudaMemcpyHostToDevice);
@@ -152,10 +156,13 @@ double gpuRefSpMV(DeviceCsrMatrix *M, float *v_in) {
     check_vec(M->m, answer, v_out);
 
     return elapsed / (double) NITER;
+*/
+    return 1.0;
 }
 
 double hybRefSpMV(DeviceHybMatrix *dM, float *v_in) {
     float *dv_in, *dv_out;
+/*
     cudaMalloc(&dv_in, dM->n * sizeof(float));
     cudaMalloc(&dv_out, dM->m * sizeof(float));
     cudaMemcpy(dv_in, v_in, dM->n * sizeof(float), cudaMemcpyHostToDevice);
@@ -184,10 +191,13 @@ double hybRefSpMV(DeviceHybMatrix *dM, float *v_in) {
     check_vec(dM->m, answer, v_out);
 
     return elapsed / (double) NITER;
+*/
+    return 1.0;
 }
 
 double MyGpuSpMV(DeviceCsrMatrix *M, float *v_in) {
     float *dv_in, *dv_out;
+/*
     cudaMalloc(&dv_in, M->n * sizeof(float));
     cudaMalloc(&dv_out, M->m * sizeof(float));
     cudaMemcpy(dv_in, v_in, M->n * sizeof(float), cudaMemcpyHostToDevice);
@@ -217,6 +227,8 @@ double MyGpuSpMV(DeviceCsrMatrix *M, float *v_in) {
     check_vec(M->m, answer, v_out);
 
     return elapsed / (double) NITER;
+*/
+    return 1.0;
 }
 
 int main(int argc, char* argv[]) {
@@ -224,8 +236,6 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Usage: %s MATRIX.mm\n", argv[0]);
         exit(1);
     }
-
-    cusparseCreate(&handle);
 
     printf("Reading matrix at %s.\n", argv[1]);
     HostCsrMatrix *hM;
@@ -236,11 +246,6 @@ int main(int argc, char* argv[]) {
     float *v = randvec(hM->n);
 
     double cpuRefTime = cpuRefSpMV(hM, v);
-    double gpuRefTime = gpuRefSpMV(dM, v);
-    double hybRefTime = hybRefSpMV(hybM, v);
-#if CUSTOM
-    double myRefTime = MyGpuSpMV(dM, v);
-#endif
 
     double gflop = 2.e-9 * 2.0 * hM->nnz;
     double gbytes = 2.e-9 * (
@@ -251,19 +256,8 @@ int main(int argc, char* argv[]) {
 
     printf("Platform  Time         Gflops/s    %%peak Gbytes/s     %%peak\n");
     printf("MKL      % 1.8f  % 2.8f  %02.f   %02.8f   %02.f\n", cpuRefTime,
-            gflop/cpuRefTime, 100.0*gflop/cpuRefTime/2.67,
-            gbytes/cpuRefTime, 100.0*gbytes/cpuRefTime/25.6);
-    printf("cusp CSR % 1.8f  % 2.8f  %02.f   %02.8f   %02.f\n", gpuRefTime,
-            gflop/gpuRefTime, 100.0*gflop/gpuRefTime/1345.0,
-            gbytes/gpuRefTime, 100.0*gbytes/gpuRefTime/177.4);
-    printf("cusp HYB % 1.8f  % 2.8f  %02.f   %02.8f   %02.f\n", hybRefTime,
-            gflop/hybRefTime, 100.0*gflop/hybRefTime/1345.0,
-            gbytes/hybRefTime, 100.0*gbytes/hybRefTime/177.4);
-#if CUSTOM
-    printf("Custom   % 1.8f  % 2.8f  %02.f   %02.8f   %02.f\n", myRefTime,
-            gflop/myRefTime, 100.0*gflop/myRefTime/1345.0,
-            gbytes/myRefTime, 100.8*gbytes/myRefTime/177.4);
-#endif
+            gflop/cpuRefTime, 100.0*gflop/cpuRefTime/3.33/6.0,
+            gbytes/cpuRefTime, 100.0*gbytes/cpuRefTime/32.0);
 
     return 0;
 }
