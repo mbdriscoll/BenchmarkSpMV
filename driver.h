@@ -35,16 +35,6 @@ class HostCsrMatrix : public CsrMatrix {
     { }
 };
 
-class DeviceCsrMatrix : public CsrMatrix {
-  public:
-    DeviceCsrMatrix(int m, int n, int nnz, int *rows, int *cols, float *vals);
-};
-
-class DeviceHybMatrix : public CsrMatrix {
-  public:
-    DeviceHybMatrix(DeviceCsrMatrix *Mcsr);
-};
-
 void check_vec(int n, float *expected, float *actual);
 
 #include "mic.h"
