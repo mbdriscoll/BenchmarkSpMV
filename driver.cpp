@@ -237,6 +237,12 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
+#ifdef __INTEL_OFFLOAD
+    printf("Checking for number of Intel Xeon Phi devices...");
+    int num_devices = _Offload_number_of_devices();
+    printf(" %d\n",num_devices);
+#endif
+
     printf("Reading matrix at %s.\n", argv[1]);
     HostCsrMatrix *hM;
     DeviceCsrMatrix *dM;
@@ -255,7 +261,7 @@ int main(int argc, char* argv[]) {
             (hM->n + hM->m) * sizeof(float)); // vectors
 
     printf("Platform  Time         Gflops/s    %%peak Gbytes/s     %%peak\n");
-    printf("MKL      % 1.8f  % 2.8f  %02.f   %02.8f   %02.f\n", cpuRefTime,
+    printf("MKL-host % 1.8f  % 2.8f  %02.f   %02.8f   %02.f\n", cpuRefTime,
             gflop/cpuRefTime, 100.0*gflop/cpuRefTime/3.33/6.0,
             gbytes/cpuRefTime, 100.0*gbytes/cpuRefTime/32.0);
 
