@@ -1,3 +1,6 @@
+#ifndef _MBD_DRIVER_H_
+#define _MBD_DRIVER_H_
+
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -10,6 +13,8 @@ extern "C" {
 #include "mmio.h"
 #include <mkl_spblas.h>
 }
+
+#define NITER 1000
 
 class CsrMatrix {
   public:
@@ -39,3 +44,11 @@ class DeviceHybMatrix : public CsrMatrix {
   public:
     DeviceHybMatrix(DeviceCsrMatrix *Mcsr);
 };
+
+void check_vec(int n, float *expected, float *actual);
+
+#include "mic.h"
+
+extern float *answer;
+
+#endif /* _MBD_DRIVER_H_ */

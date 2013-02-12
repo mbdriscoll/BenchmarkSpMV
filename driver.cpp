@@ -1,7 +1,5 @@
 #include "driver.h"
 
-#define NITER 100
-
 float *answer = NULL;
 
 void
@@ -251,7 +249,10 @@ int main(int argc, char* argv[]) {
 
     float *v = randvec(hM->n);
 
-    double cpuRefTime = cpuRefSpMV(hM, v);
+    double cpuRefTime = cpuRefSpMV(hM, v); // warm cache
+           cpuRefTime = cpuRefSpMV(hM, v);
+    double micRefTime = micRefSpMV(hM, v); // warm cache
+           micRefTime = micRefSpMV(hM, v);
 
     double gflop = 2.e-9 * 2.0 * hM->nnz;
     double gbytes = 2.e-9 * (
@@ -264,6 +265,9 @@ int main(int argc, char* argv[]) {
     printf("MKL-host % 1.8f  % 2.8f  %02.f   %02.8f   %02.f\n", cpuRefTime,
             gflop/cpuRefTime, 100.0*gflop/cpuRefTime/3.33/6.0,
             gbytes/cpuRefTime, 100.0*gbytes/cpuRefTime/32.0);
+    printf("MKL-mic  % 1.8f  % 2.8f  %02.f   %02.8f   %02.f\n", micRefTime,
+            gflop/micRefTime, 100.0*gflop/micRefTime/1.053/60.0,
+            gbytes/micRefTime, 100.0*gbytes/micRefTime/320.0);
 
     return 0;
 }

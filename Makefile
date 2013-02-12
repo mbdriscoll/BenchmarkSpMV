@@ -6,7 +6,7 @@ LDFLAGS = -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -lpthread
 
 default: driver
 
-driver: driver.o mmio.o
+driver: driver.o mic.o mmio.o
 
 kernel.o: kernel.cu
 	$(NVCC) -c $< -o $@
