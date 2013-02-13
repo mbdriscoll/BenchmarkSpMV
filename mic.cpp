@@ -1,12 +1,12 @@
 #include "driver.h"
 
-static int *Mrows, *Mcols;
-static float *Mvals;
+int *Mrows, *Mcols;
+float *Mvals;
 
 #define ALLOC alloc_if(1) free_if(0)
-#define FREE alloc_if(0) free_if(1)
+#define FREE  alloc_if(0) free_if(1)
 #define REUSE alloc_if(0) free_if(0)
-#define TEMP alloc_if(1) free_if(1)
+#define TEMP  alloc_if(1) free_if(1)
 
 double micRefSpMV(DeviceCsrMatrix *M, float *v_in) {
     int m = M->m,
