@@ -66,6 +66,12 @@ DeviceCsrMatrix::DeviceCsrMatrix(int m, int n, int nnz, int *coo_rows, int *coo_
 
     int info;
 
+    /* Hack: these will be device pointers only, but they have to have different values with
+     * enough space in between so the runtime doesn't complain about overlap. */
+    Mrows = coo_rows;
+    Mcols = coo_cols;
+    Mvals = coo_vals;
+
 #pragma offload target(mic) \
     in(coo_rows:  length(nnz) alloc_if(1) free_if(1)) \
     in(coo_cols:  length(nnz) alloc_if(1) free_if(1)) \
