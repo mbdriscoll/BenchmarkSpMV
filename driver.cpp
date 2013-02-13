@@ -1,5 +1,9 @@
 #include "driver.h"
 
+extern "C" {
+#include "mmio.h"
+}
+
 float *answer = NULL;
 
 void
