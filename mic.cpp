@@ -9,35 +9,46 @@ double micRefSpMV(HostCsrMatrix *M, float *v) {
     int m = M->m;
     float *actual = (float*) malloc(m * sizeof(float));
 
+#if 0
     #pragma offload target(mic) \
         in(v:      length(M->n) alloc_if(1) free_if(0)) \
         in(actual: length(M->m) alloc_if(1) free_if(0))
     {}
+#endif
 
     struct timeval start, end;
     double elapsed = 0.0;
     for(int i = 0; i < NITER; i++) {
         gettimeofday (&start, NULL);
         {
+#if 0
             #pragma offload target(mic) \
 	        nocopy(Mrows:  length(M->m+1) alloc_if(0) free_if(0)) \
 	        nocopy(Mcols:  length(M->nnz) alloc_if(0) free_if(0)) \
 	        nocopy(Mvals:  length(M->nnz) alloc_if(0) free_if(0)) \
 	        nocopy(actual: length(M->m)   alloc_if(0) free_if(0)) \
 	        nocopy(v:      length(M->n)   alloc_if(0) free_if(0))
+#endif
             mkl_scsrgemv((char*)"N", &m, Mvals, Mrows, Mcols, v, actual);
         }
         gettimeofday (&end, NULL);
         elapsed += (end.tv_sec-start.tv_sec) + 1.e-6*(end.tv_usec - start.tv_usec);
     }
 
+#if 0
     #pragma offload target(mic) \
-        out   (actual: length(M->m) alloc_if(0) free_if(1)) \
-        nocopy(v:      length(M->n) alloc_if(0) free_if(1))
+        out   (actual: length(M->m)   alloc_if(0) free_if(1)) \
+        nocopy(v:      length(M->n)   alloc_if(0) free_if(1)) \
+        nocopy(Mrows:  length(M->m+1) alloc_if(0) free_if(1)) \
+        nocopy(Mcols:  length(M->nnz) alloc_if(0) free_if(1)) \
+        nocopy(Mvals:  length(M->nnz) alloc_if(0) free_if(1))
     {}
+#endif
 
     check_vec(M->m, answer, actual);
     return elapsed / (double) NITER;
+
+    return 1.0;
 }
 
 DeviceCsrMatrix::DeviceCsrMatrix(int m, int n, int nnz, int *coo_rows, int *coo_cols, float *coo_vals) :
@@ -56,9 +67,9 @@ DeviceCsrMatrix::DeviceCsrMatrix(int m, int n, int nnz, int *coo_rows, int *coo_
     int info;
 
 #pragma offload target(mic) \
-    in(coo_rows:     length(nnz) alloc_if(1) free_if(1)) \
-    in(coo_cols:     length(nnz) alloc_if(1) free_if(1)) \
-    in(coo_vals:     length(nnz) alloc_if(1) free_if(1)) \
+    in(coo_rows:  length(nnz) alloc_if(1) free_if(1)) \
+    in(coo_cols:  length(nnz) alloc_if(1) free_if(1)) \
+    in(coo_vals:  length(nnz) alloc_if(1) free_if(1)) \
     nocopy(Mrows: length(m+1) alloc_if(1) free_if(0)) \
     nocopy(Mcols: length(nnz) alloc_if(1) free_if(0)) \
     nocopy(Mvals: length(nnz) alloc_if(1) free_if(0))
