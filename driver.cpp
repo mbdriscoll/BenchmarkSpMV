@@ -89,8 +89,8 @@ int main(int argc, char* argv[]) {
     printf("running mkl-mic tests\n");
     double micRefTime = micRefSpMV(dM, v);
 
-    double gflop = 1.e-9 * 2.0 * hM->nnz;
-    double gbytes = 1.e-9 * (
+    double gflop = 2.e-9 * 2.0 * hM->nnz;
+    double gbytes = 2.e-9 * (
             hM->nnz * sizeof(float) + // vals
             hM->nnz * sizeof(int) + // cols
             hM->m * sizeof(int) + // rows

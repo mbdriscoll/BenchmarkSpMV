@@ -8,15 +8,15 @@ static float *Mvals;
 #define REUSE alloc_if(0) free_if(0)
 #define TEMP alloc_if(1) free_if(1)
 
-double micRefSpMV(DeviceCsrMatrix *M, float *v) {
+double micRefSpMV(DeviceCsrMatrix *M, float *v_in) {
     int m = M->m,
         n = M->n,
         nnz = M->nnz;
-    float *actual = (float*) malloc(m * sizeof(float));
+    float *v_out = (float*) malloc(m * sizeof(float));
 
     #pragma offload target(mic) \
-        in    (v:      length(M->n) align(64) ALLOC) \
-        nocopy(actual: length(M->m) align(64) ALLOC)
+        in    (v_in:   length(M->n) align(64) ALLOC) \
+        nocopy(v_out:  length(M->m) align(64) ALLOC)
     {}
 
     struct timeval start, end;
@@ -28,23 +28,23 @@ double micRefSpMV(DeviceCsrMatrix *M, float *v) {
 	        nocopy(Mrows:  length(m+1) REUSE) \
 	        nocopy(Mcols:  length(nnz) REUSE) \
 	        nocopy(Mvals:  length(nnz) REUSE) \
-	        nocopy(actual: length(m)   REUSE) \
-	        nocopy(v:      length(n)   REUSE)
-            mkl_scsrgemv((char*)"N", &m, Mvals, Mrows, Mcols, v, actual);
+	        nocopy(v_out:  length(m)   REUSE) \
+	        nocopy(v_in:   length(n)   REUSE)
+            mkl_scsrgemv((char*)"N", &m, Mvals, Mrows, Mcols, v_in, v_out);
         }
         gettimeofday (&end, NULL);
         elapsed += (end.tv_sec-start.tv_sec) + 1.e-6*(end.tv_usec - start.tv_usec);
     }
 
     #pragma offload target(mic) \
-        out   (actual: length(m)   FREE) \
-        nocopy(v:      length(n)   FREE) \
+        out   (v_out:  length(m)   FREE) \
+        nocopy(v_in:   length(n)   FREE) \
         nocopy(Mrows:  length(m+1) FREE) \
         nocopy(Mcols:  length(nnz) FREE) \
         nocopy(Mvals:  length(nnz) FREE)
     {}
 
-    check_vec(M->m, answer, actual);
+    check_vec(M->m, answer, v_out);
     return elapsed / (double) NITER;
 }
 
