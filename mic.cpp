@@ -5,30 +5,33 @@ static int *Mrows, *Mcols;
 static float *Mvals;
 #pragma offload_attribute (pop)
 
+#define ALLOC alloc_if(1) free_if(0)
+#define FREE alloc_if(0) free_if(1)
+#define REUSE alloc_if(0) free_if(0)
+#define TEMP alloc_if(1) free_if(1)
+
 double micRefSpMV(HostCsrMatrix *M, float *v) {
-    int m = M->m;
+    int m = M->m,
+        n = M->n,
+        nnz = M->nnz;
     float *actual = (float*) malloc(m * sizeof(float));
 
-#if 0
     #pragma offload target(mic) \
-        in(v:      length(M->n) alloc_if(1) free_if(0)) \
-        in(actual: length(M->m) alloc_if(1) free_if(0))
+        in    (v:      length(M->n) ALLOC) \
+        nocopy(actual: length(M->m) ALLOC)
     {}
-#endif
 
     struct timeval start, end;
     double elapsed = 0.0;
     for(int i = 0; i < NITER; i++) {
         gettimeofday (&start, NULL);
         {
-#if 0
             #pragma offload target(mic) \
-	        nocopy(Mrows:  length(M->m+1) alloc_if(0) free_if(0)) \
-	        nocopy(Mcols:  length(M->nnz) alloc_if(0) free_if(0)) \
-	        nocopy(Mvals:  length(M->nnz) alloc_if(0) free_if(0)) \
-	        nocopy(actual: length(M->m)   alloc_if(0) free_if(0)) \
-	        nocopy(v:      length(M->n)   alloc_if(0) free_if(0))
-#endif
+	        nocopy(Mrows:  length(m+1) REUSE) \
+	        nocopy(Mcols:  length(nnz) REUSE) \
+	        nocopy(Mvals:  length(nnz) REUSE) \
+	        nocopy(actual: length(m)   REUSE) \
+	        nocopy(v:      length(n)   REUSE)
             mkl_scsrgemv((char*)"N", &m, Mvals, Mrows, Mcols, v, actual);
         }
         gettimeofday (&end, NULL);
@@ -37,18 +40,16 @@ double micRefSpMV(HostCsrMatrix *M, float *v) {
 
 #if 0
     #pragma offload target(mic) \
-        out   (actual: length(M->m)   alloc_if(0) free_if(1)) \
-        nocopy(v:      length(M->n)   alloc_if(0) free_if(1)) \
-        nocopy(Mrows:  length(M->m+1) alloc_if(0) free_if(1)) \
-        nocopy(Mcols:  length(M->nnz) alloc_if(0) free_if(1)) \
-        nocopy(Mvals:  length(M->nnz) alloc_if(0) free_if(1))
+        out   (actual: length(m)   FREE) \
+        nocopy(v:      length(n)   FREE) \
+        nocopy(Mrows:  length(m+1) FREE) \
+        nocopy(Mcols:  length(nnz) FREE) \
+        nocopy(Mvals:  length(nnz) FREE)
     {}
 #endif
 
     check_vec(M->m, answer, actual);
     return elapsed / (double) NITER;
-
-    return 1.0;
 }
 
 DeviceCsrMatrix::DeviceCsrMatrix(int m, int n, int nnz, int *coo_rows, int *coo_cols, float *coo_vals) :

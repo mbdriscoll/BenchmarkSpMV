@@ -83,7 +83,7 @@ check_vec(int n, float *expected, float *actual) {
         if ( fabs(expected[i] - actual[i]) > 2.0*FLT_EPSILON )
             errors += 1;
 
-    if (errors)
+    //if (errors)
         fprintf(stderr, "Found %d/%d errors in answer.\n", errors, n);
 }
 
