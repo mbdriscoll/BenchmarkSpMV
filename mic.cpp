@@ -1,10 +1,17 @@
 #include "driver.h"
 
+#pragma offload_attribute (push,target(mic))
+static int *Mrows, *Mcols;
+static float *Mvals;
+#pragma offload_attribute (pop)
+
 double micRefSpMV(HostCsrMatrix *M, float *v) {
-    answer = (float*) malloc(M->m * sizeof(float));
+    int m = M->m;
+    float *actual = (float*) malloc(m * sizeof(float));
 
     #pragma offload target(mic) \
-        in(v: length(M->n) alloc_if(1) free_if(0))
+        in(v:      length(M->n) alloc_if(1) free_if(0)) \
+        in(actual: length(M->m) alloc_if(1) free_if(0))
     {}
 
     struct timeval start, end;
@@ -12,28 +19,24 @@ double micRefSpMV(HostCsrMatrix *M, float *v) {
     for(int i = 0; i < NITER; i++) {
         gettimeofday (&start, NULL);
         {
-            int     Mm = M->m,
-                *Mrows = M->rows,
-                *Mcols = M->cols;
-            float *Mvals = M->vals;
             #pragma offload target(mic) \
 	        nocopy(Mrows:  length(M->m+1) alloc_if(0) free_if(0)) \
 	        nocopy(Mcols:  length(M->nnz) alloc_if(0) free_if(0)) \
 	        nocopy(Mvals:  length(M->nnz) alloc_if(0) free_if(0)) \
-	        nocopy(answer: length(M->n)   alloc_if(0) free_if(0)) \
+	        nocopy(actual: length(M->m)   alloc_if(0) free_if(0)) \
 	        nocopy(v:      length(M->n)   alloc_if(0) free_if(0))
-            mkl_scsrgemv((char*)"N", &Mm, Mvals, Mrows, Mcols, v, answer);
+            mkl_scsrgemv((char*)"N", &m, Mvals, Mrows, Mcols, v, actual);
         }
         gettimeofday (&end, NULL);
         elapsed += (end.tv_sec-start.tv_sec) + 1.e-6*(end.tv_usec - start.tv_usec);
     }
 
     #pragma offload target(mic) \
-        out   (answer: length(M->n) alloc_if(0) free_if(1)) \
-        nocopy(v:      length(M->m) alloc_if(0) free_if(1))
+        out   (actual: length(M->m) alloc_if(0) free_if(1)) \
+        nocopy(v:      length(M->n) alloc_if(0) free_if(1))
     {}
 
-    check_vec(M->m, answer, answer);
+    check_vec(M->m, answer, actual);
     return elapsed / (double) NITER;
 }
 
@@ -52,19 +55,14 @@ DeviceCsrMatrix::DeviceCsrMatrix(int m, int n, int nnz, int *coo_rows, int *coo_
 
     int info;
 
-    /* compiler throws internal error if we just put a bare "rows", etc, in the pragma */
-    int* thisrows = this->rows;
-    int* thiscols = this->cols;
-    float* thisvals = this->vals;
-
 #pragma offload target(mic) \
     in(coo_rows:     length(nnz) alloc_if(1) free_if(1)) \
     in(coo_cols:     length(nnz) alloc_if(1) free_if(1)) \
     in(coo_vals:     length(nnz) alloc_if(1) free_if(1)) \
-    nocopy(thisrows: length(m+1) alloc_if(1) free_if(0)) \
-    nocopy(thiscols: length(nnz) alloc_if(1) free_if(0)) \
-    nocopy(thisvals: length(nnz) alloc_if(1) free_if(0))
-    mkl_scsrcoo(job, &m, vals, cols, rows, &nnz, coo_vals, coo_rows, coo_cols, &info);
+    nocopy(Mrows: length(m+1) alloc_if(1) free_if(0)) \
+    nocopy(Mcols: length(nnz) alloc_if(1) free_if(0)) \
+    nocopy(Mvals: length(nnz) alloc_if(1) free_if(0))
+    mkl_scsrcoo(job, &m, Mvals, Mcols, Mrows, &nnz, coo_vals, coo_rows, coo_cols, &info);
 
     assert(info == 0 && "Converted COO->CSR on MIC");
 }
