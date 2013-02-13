@@ -27,13 +27,9 @@ class CsrMatrix {
     { }
 };
 
-class HostCsrMatrix : public CsrMatrix {
-  public:
-    HostCsrMatrix(int m, int n, int nnz, int *coo_rows, int *coo_cols, float *coo_vals);
-};
-
 void check_vec(int n, float *expected, float *actual);
 
+#include "cpu.h"
 #include "mic.h"
 
 extern float *answer;

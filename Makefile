@@ -5,7 +5,7 @@ CXXFLAGS = -O2 -openmp -I$(MKLROOT)/include -offload-option,mic,compiler,"  -L$(
 LDFLAGS =  -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -lpthread -lm 
 
 default: driver
-driver: driver.cpp mic.cpp mmio.c
+driver: driver.cpp cpu.cpp mic.cpp mmio.c
 
 .PHONY: clean
 
