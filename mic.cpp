@@ -1,16 +1,14 @@
 #include "driver.h"
 
-#pragma offload_attribute (push,target(mic))
 static int *Mrows, *Mcols;
 static float *Mvals;
-#pragma offload_attribute (pop)
 
 #define ALLOC alloc_if(1) free_if(0)
 #define FREE alloc_if(0) free_if(1)
 #define REUSE alloc_if(0) free_if(0)
 #define TEMP alloc_if(1) free_if(1)
 
-double micRefSpMV(HostCsrMatrix *M, float *v) {
+double micRefSpMV(DeviceCsrMatrix *M, float *v) {
     int m = M->m,
         n = M->n,
         nnz = M->nnz;
@@ -38,7 +36,6 @@ double micRefSpMV(HostCsrMatrix *M, float *v) {
         elapsed += (end.tv_sec-start.tv_sec) + 1.e-6*(end.tv_usec - start.tv_usec);
     }
 
-#if 0
     #pragma offload target(mic) \
         out   (actual: length(m)   FREE) \
         nocopy(v:      length(n)   FREE) \
@@ -46,10 +43,15 @@ double micRefSpMV(HostCsrMatrix *M, float *v) {
         nocopy(Mcols:  length(nnz) FREE) \
         nocopy(Mvals:  length(nnz) FREE)
     {}
-#endif
 
     check_vec(M->m, answer, actual);
     return elapsed / (double) NITER;
+}
+
+DeviceCsrMatrix::~DeviceCsrMatrix() {
+    free(Mrows);
+    free(Mcols);
+    free(Mvals);
 }
 
 DeviceCsrMatrix::DeviceCsrMatrix(int m, int n, int nnz, int *coo_rows, int *coo_cols, float *coo_vals) :
@@ -69,17 +71,17 @@ DeviceCsrMatrix::DeviceCsrMatrix(int m, int n, int nnz, int *coo_rows, int *coo_
 
     /* Hack: these will be device pointers only, but they have to have different values with
      * enough space in between so the runtime doesn't complain about overlap. */
-    Mrows = coo_rows;
-    Mcols = coo_cols;
-    Mvals = coo_vals;
+    Mrows = (int*) malloc((m+1) * sizeof(int));
+    Mcols = (int*) malloc(nnz * sizeof(int));;
+    Mvals = (float*) malloc(nnz * sizeof(float));;
 
 #pragma offload target(mic) \
-    in(coo_rows:  length(nnz) alloc_if(1) free_if(1)) \
-    in(coo_cols:  length(nnz) alloc_if(1) free_if(1)) \
-    in(coo_vals:  length(nnz) alloc_if(1) free_if(1)) \
-    nocopy(Mrows: length(m+1) alloc_if(1) free_if(0)) \
-    nocopy(Mcols: length(nnz) alloc_if(1) free_if(0)) \
-    nocopy(Mvals: length(nnz) alloc_if(1) free_if(0))
+    in(coo_rows:  length(nnz) TEMP) \
+    in(coo_cols:  length(nnz) TEMP) \
+    in(coo_vals:  length(nnz) TEMP) \
+    nocopy(Mrows: length(m+1) ALLOC) \
+    nocopy(Mcols: length(nnz) ALLOC) \
+    nocopy(Mvals: length(nnz) ALLOC)
     mkl_scsrcoo(job, &m, Mvals, Mcols, Mrows, &nnz, coo_vals, coo_rows, coo_cols, &info);
 
     assert(info == 0 && "Converted COO->CSR on MIC");

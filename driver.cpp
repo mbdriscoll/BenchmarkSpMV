@@ -83,8 +83,7 @@ check_vec(int n, float *expected, float *actual) {
         if ( fabs(expected[i] - actual[i]) > 2.0*FLT_EPSILON )
             errors += 1;
 
-    //if (errors)
-        fprintf(stderr, "Found %d/%d errors in answer.\n", errors, n);
+    fprintf(stderr, "Found %d/%d errors in answer.\n", errors, n);
 }
 
 double cpuRefSpMV(HostCsrMatrix *M, float *v) {
@@ -129,8 +128,7 @@ int main(int argc, char* argv[]) {
            cpuRefTime = cpuRefSpMV(hM, v);
 
     printf("running mkl-mic tests\n");
-    double micRefTime = micRefSpMV(hM, v); // warm cache
-           micRefTime = micRefSpMV(hM, v);
+    double micRefTime = micRefSpMV(dM, v);
 
     double gflop = 1.e-9 * 2.0 * hM->nnz;
     double gbytes = 1.e-9 * (
