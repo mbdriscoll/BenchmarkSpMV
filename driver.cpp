@@ -6,6 +6,28 @@ extern "C" {
 
 float *answer = NULL;
 
+HostCsrMatrix::HostCsrMatrix(int m, int n, int nnz, int *coo_rows, int *coo_cols, float *coo_vals) :
+	CsrMatrix(m, n, nnz, NULL, NULL, NULL)
+{
+    rows = (int*) malloc((m+1) * sizeof(int));
+    cols = (int*) malloc(nnz * sizeof(int));
+    vals = (float*) malloc(nnz * sizeof(float));
+
+    /* Use MKL to convert and sort to CSR matrix. */
+    int job[] = {
+        2, // job(1)=2 (coo->csr with sorting)
+        1, // job(2)=1 (one-based indexing for csr matrix)
+        1, // job(3)=1 (one-based indexing for coo matrix)
+        0, // empty
+        nnz, // job(5)=nnz (sets nnz for csr matrix)
+        0  // job(6)=0 (all output arrays filled)
+    };
+
+    int info;
+    mkl_scsrcoo(job, &m, vals, cols, rows, &nnz, coo_vals, coo_rows, coo_cols, &info);
+    assert(info == 0 && "Converted COO->CSR");
+}
+
 void
 mm_read(char* filename, HostCsrMatrix **hM, DeviceCsrMatrix **dM) {
     FILE* mmfile = fopen(filename, "r");
@@ -29,35 +51,21 @@ mm_read(char* filename, HostCsrMatrix **hM, DeviceCsrMatrix **dM) {
     int *coo_cols = (int*) malloc(nnz * sizeof(int));
     float *coo_vals = (float*) malloc(nnz * sizeof(float));
 
-    *dM = new DeviceCsrMatrix(m, n, nnz, coo_rows, coo_cols, coo_vals);
-
-    int *csr_rows = (int*) malloc((m+1) * sizeof(int));
-    int *csr_cols = (int*) malloc(nnz * sizeof(int));
-    float *csr_vals = (float*) malloc(nnz * sizeof(float));
-
+    printf("reading matrix file\n");
     for (int i = 0; i < nnz; i++)
         status = fscanf(mmfile, "%d %d %g\n", &coo_rows[i], &coo_cols[i], &coo_vals[i]);
 
-    /* Use MKL to convert and sort to CSR matrix. */
-    int job[] = {
-        2, // job(1)=2 (coo->csr with sorting)
-        1, // job(2)=1 (one-based indexing for csr matrix)
-        1, // job(3)=1 (one-based indexing for coo matrix)
-        0, // empty
-        nnz, // job(5)=nnz (sets nnz for csr matrix)
-        0  // job(6)=0 (all output arrays filled)
-    };
+    printf("building host matrix\n");
+    *hM = new HostCsrMatrix(m, n, nnz, coo_rows, coo_cols, coo_vals);
 
-    int info;
-    mkl_scsrcoo(job, &m, csr_vals, csr_cols, csr_rows, &nnz, coo_vals, coo_rows, coo_cols, &info);
-    assert(info == 0 && "Converted COO->CSR");
-
-    *hM = new HostCsrMatrix(m, n, nnz, csr_rows, csr_cols, csr_vals);
+    printf("building device matrix\n");
+    *dM = new DeviceCsrMatrix(m, n, nnz, coo_rows, coo_cols, coo_vals);
 
     free(coo_rows);
     free(coo_cols);
     free(coo_vals);
-    /* don't free csr_rows etc. keep for hM to use */
+
+    printf("done building matrices\n");
 }
 
 float *
@@ -116,8 +124,11 @@ int main(int argc, char* argv[]) {
 
     float *v = randvec(hM->n);
 
+    printf("running mkl-host tests\n");
     double cpuRefTime = cpuRefSpMV(hM, v); // warm cache
            cpuRefTime = cpuRefSpMV(hM, v);
+
+    printf("running mkl-mic tests\n");
     double micRefTime = micRefSpMV(hM, v); // warm cache
            micRefTime = micRefSpMV(hM, v);
 

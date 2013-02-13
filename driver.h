@@ -29,9 +29,7 @@ class CsrMatrix {
 
 class HostCsrMatrix : public CsrMatrix {
   public:
-    HostCsrMatrix(int m, int n, int nnz, int *rows, int *cols, float *vals) :
-        CsrMatrix(m, n, nnz, rows, cols, vals)
-    { }
+    HostCsrMatrix(int m, int n, int nnz, int *coo_rows, int *coo_cols, float *coo_vals);
 };
 
 void check_vec(int n, float *expected, float *actual);
