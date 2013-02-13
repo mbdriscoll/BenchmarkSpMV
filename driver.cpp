@@ -25,6 +25,8 @@ mm_read(char* filename, HostCsrMatrix **hM, DeviceCsrMatrix **dM) {
     int *coo_cols = (int*) malloc(nnz * sizeof(int));
     float *coo_vals = (float*) malloc(nnz * sizeof(float));
 
+    *dM = new DeviceCsrMatrix(m, n, nnz, coo_rows, coo_cols, coo_vals);
+
     int *csr_rows = (int*) malloc((m+1) * sizeof(int));
     int *csr_cols = (int*) malloc(nnz * sizeof(int));
     float *csr_vals = (float*) malloc(nnz * sizeof(float));
@@ -47,7 +49,6 @@ mm_read(char* filename, HostCsrMatrix **hM, DeviceCsrMatrix **dM) {
     assert(info == 0 && "Converted COO->CSR");
 
     *hM = new HostCsrMatrix(m, n, nnz, csr_rows, csr_cols, csr_vals);
-    *dM = new DeviceCsrMatrix(m, n, nnz, csr_rows, csr_cols, csr_vals);
 
     free(coo_rows);
     free(coo_cols);
@@ -108,7 +109,6 @@ int main(int argc, char* argv[]) {
     HostCsrMatrix *hM;
     DeviceCsrMatrix *dM;
     mm_read(argv[1], &hM, &dM);
-    DeviceHybMatrix *hybM = new DeviceHybMatrix(dM);
 
     float *v = randvec(hM->n);
 

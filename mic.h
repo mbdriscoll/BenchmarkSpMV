@@ -7,7 +7,7 @@ double micRefSpMV(HostCsrMatrix *M, float *v);
 
 class DeviceCsrMatrix : public CsrMatrix {
   public:
-    DeviceCsrMatrix(int m, int n, int nnz, int *rows, int *cols, float *vals);
+    DeviceCsrMatrix(int m, int n, int nnz, int *coo_rows, int *coo_cols, float *coo_vals);
 };
 
 class DeviceHybMatrix : public CsrMatrix {
