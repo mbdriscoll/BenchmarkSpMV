@@ -6,6 +6,7 @@ LDFLAGS =  -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -lpthread -lm
 
 default: driver
 driver: driver.cpp cpu.cpp mic.cpp mmio.c
+	$(CXX) $^ -o $@ $(CXXFLAGS) $(LDFLAGS)
 
 .PHONY: clean
 
