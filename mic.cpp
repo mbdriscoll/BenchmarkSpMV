@@ -69,8 +69,7 @@ DeviceCsrMatrix::DeviceCsrMatrix(int m, int n, int nnz, int *coo_rows, int *coo_
 
     int info;
 
-    /* Hack: these will be device pointers only, but they have to have different values with
-     * enough space in between so the runtime doesn't complain about overlap. */
+    /* do i need to malloc host memory? */
     Mrows = (int*) malloc((m+1) * sizeof(int));
     Mcols = (int*) malloc(nnz * sizeof(int));;
     Mvals = (float*) malloc(nnz * sizeof(float));;
