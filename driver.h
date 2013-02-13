@@ -13,7 +13,7 @@ extern "C" {
 #include <mkl_spblas.h>
 }
 
-#define NITER 1000
+#define NITER 10
 
 class CsrMatrix {
   public:

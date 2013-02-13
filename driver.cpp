@@ -91,6 +91,12 @@ double cpuRefSpMV(HostCsrMatrix *M, float *v) {
 
     struct timeval start, end;
     double elapsed = 0.0;
+
+    /* warmup */
+    for(int i = 0; i < 10; i++)
+	mkl_scsrgemv((char*)"N", &M->m, M->vals, M->rows, M->cols, v, answer);
+
+    /* count */
     for(int i = 0; i < NITER; i++) {
         gettimeofday (&start, NULL);
         {
@@ -124,8 +130,7 @@ int main(int argc, char* argv[]) {
     float *v = randvec(hM->n);
 
     printf("running mkl-host tests\n");
-    double cpuRefTime = cpuRefSpMV(hM, v); // warm cache
-           cpuRefTime = cpuRefSpMV(hM, v);
+    double cpuRefTime = cpuRefSpMV(hM, v);
 
     printf("running mkl-mic tests\n");
     double micRefTime = micRefSpMV(dM, v);

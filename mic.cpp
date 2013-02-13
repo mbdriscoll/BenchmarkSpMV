@@ -15,8 +15,8 @@ double micRefSpMV(DeviceCsrMatrix *M, float *v) {
     float *actual = (float*) malloc(m * sizeof(float));
 
     #pragma offload target(mic) \
-        in    (v:      length(M->n) ALLOC) \
-        nocopy(actual: length(M->m) ALLOC)
+        in    (v:      length(M->n) align(64) ALLOC) \
+        nocopy(actual: length(M->m) align(64) ALLOC)
     {}
 
     struct timeval start, end;
@@ -79,9 +79,9 @@ DeviceCsrMatrix::DeviceCsrMatrix(int m, int n, int nnz, int *coo_rows, int *coo_
     in(coo_rows:  length(nnz) TEMP) \
     in(coo_cols:  length(nnz) TEMP) \
     in(coo_vals:  length(nnz) TEMP) \
-    nocopy(Mrows: length(m+1) ALLOC) \
-    nocopy(Mcols: length(nnz) ALLOC) \
-    nocopy(Mvals: length(nnz) ALLOC)
+    nocopy(Mrows: length(m+1) align(64) ALLOC) \
+    nocopy(Mcols: length(nnz) align(64) ALLOC) \
+    nocopy(Mvals: length(nnz) align(64) ALLOC)
     mkl_scsrcoo(job, &m, Mvals, Mcols, Mrows, &nnz, coo_vals, coo_rows, coo_cols, &info);
 
     assert(info == 0 && "Converted COO->CSR on MIC");
