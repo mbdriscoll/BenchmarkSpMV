@@ -154,11 +154,11 @@ int main(int argc, char* argv[]) {
         gettimeofday (&start, NULL);
         {
             #pragma offload target(mic) \
-	        nocopy(rowptrs:    length(m+1) REUSE) \
-	        nocopy(colinds:    length(nnz) REUSE) \
-	        nocopy(vals:       length(nnz) REUSE) \
-	        nocopy(v:          length(m)   REUSE) \
-	        nocopy(mic_answer: length(n)   REUSE)
+	        nocopy(rowptrs:    REUSE) \
+	        nocopy(colinds:    REUSE) \
+	        nocopy(vals:       REUSE) \
+	        nocopy(v:          REUSE) \
+	        nocopy(mic_answer: REUSE)
             mkl_scsrgemv((char*)"N", &m, vals, rowptrs, colinds, v, mic_answer);
         }
         gettimeofday (&end, NULL);
