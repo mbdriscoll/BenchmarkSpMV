@@ -8,7 +8,7 @@
 
 #include <mkl_spblas.h>
 
-#include "mmio.h"
+#include "extra/mmio.h"
 
 #define NITER 1000
 
@@ -159,8 +159,8 @@ int main(int argc, char* argv[]) {
     printf("checking the answer\n");
     check_vec(m, cpu_answer, mic_answer);
 
-    double gflop = 1.e-9 * 2.0 * nnz;
-    double gbytes = 1.e-9 * (
+    double gflop = 2.e-9 * 2.0 * nnz;
+    double gbytes = 2.e-9 * (
             nnz * sizeof(float) + // vals
             nnz * sizeof(int) + // cols
             (m+1) * sizeof(int) + // rows

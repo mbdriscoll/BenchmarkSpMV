@@ -3,9 +3,9 @@ CFLAGS = -std=c99 -O2 -openmp -I$(MKLROOT)/include -mkl=parallel  -offload-optio
 
 default: bench 
 
-bench: mmio.o
+bench: extra/mmio.o
 
 .PHONY: clean
 
 clean:
-	rm -rf bench *.o
+	rm -rf bench *.o extra/*.o
