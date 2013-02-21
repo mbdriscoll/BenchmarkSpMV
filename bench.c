@@ -7,14 +7,14 @@
 #include <mkl_spblas.h>
 #include "extra/mmio.h"
 
-/* The number of iterations used to get average performance */
+/* number of iterations to yield average performance */
 #define NITER 1000
 
 /* peak processor constants */
-#define CPU_MEMBW_GBS (32.0)
-#define MIC_MEMBW_GBS (320.0)
 #define CPU_GFLOPS (3.33*6.0)
+#define CPU_MEMBW_GBS (32.0)
 #define MIC_GFLOPS (1.053*60.0)
+#define MIC_MEMBW_GBS (320.0)
 
 /* convenience macros */
 #define ALLOC alloc_if(1) free_if(0)
@@ -26,7 +26,8 @@
 /**
  * Reads a MatrixMarket file and sets the input pointers
  */
-void mm_read(char* filename, int *m, int *n, int *nnz, int **rowptrs, int **colinds, float **vals) {
+void mm_read(char* filename, int *m, int *n, int *nnz,
+             int **rowptrs, int **colinds, float **vals) {
     // open file
     FILE* mmfile = fopen(filename, "r");
     assert(mmfile != NULL && "Read matrix file.");
@@ -36,7 +37,9 @@ void mm_read(char* filename, int *m, int *n, int *nnz, int **rowptrs, int **coli
     MM_typecode matcode;
     status = mm_read_banner(mmfile, &matcode);
     assert(status == 0 && "Parsed banner.");
-    assert(mm_is_matrix(matcode) && mm_is_sparse(matcode) && mm_is_real(matcode));
+    assert(mm_is_matrix(matcode) &&
+           mm_is_sparse(matcode) &&
+           mm_is_real(matcode));
 
     // read matrix dimensions
     status = mm_read_mtx_crd_size(mmfile, m, n, nnz);
@@ -50,7 +53,8 @@ void mm_read(char* filename, int *m, int *n, int *nnz, int **rowptrs, int **coli
 
     // read COO values
     for (int i = 0; i < *nnz; i++)
-        status = fscanf(mmfile, "%d %d %g\n", &coo_rows[i], &coo_cols[i], &coo_vals[i]);
+        status = fscanf(mmfile, "%d %d %g\n",
+            &coo_rows[i], &coo_cols[i], &coo_vals[i]);
 
     // alloc space for CSR matrix
     *rowptrs = (int*) malloc((*m+1)*sizeof(int));
@@ -67,7 +71,8 @@ void mm_read(char* filename, int *m, int *n, int *nnz, int **rowptrs, int **coli
         *nnz, // job(5)=nnz (sets nnz for csr matrix)
         0  // job(6)=0 (all output arrays filled)
     };
-    mkl_scsrcoo(job, m, *vals, *colinds, *rowptrs, nnz, coo_vals, coo_rows, coo_cols, &info);
+    mkl_scsrcoo(job, m, *vals, *colinds, *rowptrs, nnz,
+                coo_vals, coo_rows, coo_cols, &info);
     assert(info == 0 && "Converted COO->CSR");
 
     // free COO matrix
@@ -126,7 +131,8 @@ int main(int argc, char* argv[]) {
             mkl_scsrgemv((char*)"N", &m, vals, rowptrs, colinds, v, cpu_answer);
         }
         gettimeofday (&end, NULL);
-        cpuAvgTimeInSec += (end.tv_sec-start.tv_sec) + 1.e-6*(end.tv_usec - start.tv_usec);
+        cpuAvgTimeInSec += (end.tv_sec  - start.tv_sec) +
+                           (end.tv_usec - start.tv_usec) * 1.e-6;
     }
     cpuAvgTimeInSec /= (double) NITER;
     
@@ -156,7 +162,8 @@ int main(int argc, char* argv[]) {
             mkl_scsrgemv((char*)"N", &m, vals, rowptrs, colinds, v, mic_answer);
         }
         gettimeofday (&end, NULL);
-        micAvgTimeInSec += (end.tv_sec-start.tv_sec) + 1.e-6*(end.tv_usec - start.tv_usec);
+        micAvgTimeInSec += (end.tv_sec  - start.tv_sec) +
+                           (end.tv_usec - start.tv_usec) * 1.e-6;
     }
     micAvgTimeInSec /= (double) NITER;
 
@@ -202,9 +209,9 @@ int main(int argc, char* argv[]) {
     free(rowptrs);
     free(colinds);
     free(vals);
-    free(v);
     free(mic_answer);
     free(cpu_answer);
+    free(v);
 
     return 0;
 }
