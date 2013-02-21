@@ -74,7 +74,8 @@ check_vec(int n, float *expected, float *actual) {
         if ( fabs(expected[i] - actual[i]) > 2.0*FLT_EPSILON )
             errors += 1;
 
-    fprintf(stderr, "WARNING: Found %d/%d errors in answer.\n", errors, n);
+    if (errors)
+        fprintf(stderr, "WARNING: Found %d/%d errors in answer.\n", errors, n);
 }
 
 float *
@@ -115,29 +116,54 @@ int main(int argc, char* argv[]) {
         gettimeofday (&end, NULL);
         cpuAvgTimeInSec += (end.tv_sec-start.tv_sec) + 1.e-6*(end.tv_usec - start.tv_usec);
     }
-    cpuAvgTimeInSec /= (float) NITER;
+    cpuAvgTimeInSec /= (double) NITER;
     
 
     printf("running mkl-mic tests\n");
+
+    // Offload data to device
+    #pragma offload target(mic) \
+        in    (v:           length(n)   align(64) ALLOC) \
+        in    (rowptrs:     length(m+1) align(64) ALLOC) \
+        in    (colinds:     length(nnz) align(64) ALLOC) \
+        in    (vals:        length(nnz) align(64) ALLOC) \
+        nocopy(mic_answer:  length(m)   align(64) ALLOC)
+    {}
+
     double micAvgTimeInSec = 0.0;
     for(int i = 0; i < NITER; i++) {
         gettimeofday (&start, NULL);
         {
+            #pragma offload target(mic) \
+	        nocopy(rowptrs:    length(m+1) REUSE) \
+	        nocopy(colinds:    length(nnz) REUSE) \
+	        nocopy(vals:       length(nnz) REUSE) \
+	        nocopy(v:          length(m)   REUSE) \
+	        nocopy(mic_answer: length(n)   REUSE)
             mkl_scsrgemv((char*)"N", &m, vals, rowptrs, colinds, v, mic_answer);
         }
         gettimeofday (&end, NULL);
         micAvgTimeInSec += (end.tv_sec-start.tv_sec) + 1.e-6*(end.tv_usec - start.tv_usec);
     }
-    micAvgTimeInSec /= (float) NITER;
+    micAvgTimeInSec /= (double) NITER;
+
+    // Copy answer back to check solution
+    #pragma offload target(mic) \
+        nocopy(v:          length(n)   FREE) \
+        nocopy(rowptrs:    length(m+1) FREE) \
+        nocopy(colinds:    length(nnz) FREE) \
+        nocopy(vals:       length(nnz) FREE) \
+        out   (mic_answer: length(m)   FREE)
+    {}
 
     printf("checking the answer\n");
     check_vec(m, cpu_answer, mic_answer);
 
-    double gflop = 2.e-9 * 2.0 * nnz;
-    double gbytes = 2.e-9 * (
+    double gflop = 1.e-9 * 2.0 * nnz;
+    double gbytes = 1.e-9 * (
             nnz * sizeof(float) + // vals
             nnz * sizeof(int) + // cols
-            m * sizeof(int) + // rows
+            (m+1) * sizeof(int) + // rows
             (n+m) * sizeof(float)); // vectors
 
     printf("Platform  Time         Gflops/s    %%peak Gbytes/s     %%peak\n");
