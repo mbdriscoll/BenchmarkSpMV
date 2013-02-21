@@ -78,20 +78,6 @@ void mm_read(char* filename, int *m, int *n, int *nnz, int **rowptrs, int **coli
 
 
 /**
- * Prints a warning if any of the first N elements of the two vectors disagree.
- */
-void check_vec(int n, float *expected, float *actual) {
-    int errors = 0;
-    for(int i = 0; i < n; i++)
-        if ( fabs(expected[i] - actual[i]) > 2.0*FLT_EPSILON )
-            errors += 1;
-
-    if (errors)
-        fprintf(stderr, "WARNING: Found %d/%d errors in answer.\n", errors, n);
-}
-
-
-/**
  * Allocates and populates a n-vector with random numbers.
  */
 float * randvec(int n) {
@@ -156,7 +142,7 @@ int main(int argc, char* argv[]) {
         nocopy(mic_answer:  length(m)   align(64) ALLOC)
     {}
 
-    // run benchmark
+    // do NITER SpMVs with device-resident data
     double micAvgTimeInSec = 0.0;
     for(int i = 0; i < NITER; i++) {
         gettimeofday (&start, NULL);
@@ -187,7 +173,12 @@ int main(int argc, char* argv[]) {
     // Verify and display results
 
     // check the solution
-    check_vec(m, cpu_answer, mic_answer);
+    int errors = 0;
+    for(int i = 0; i < n; i++)
+        if ( fabs(cpu_answer[i] - mic_answer[i]) > 2.0*FLT_EPSILON )
+            errors += 1;
+    if (errors != 0)
+        fprintf(stderr, "WARNING: Found %d/%d errors in answer.\n", errors, n);
 
     // calculate total bytes and flops
     double gflop = 2.e-9 * 2.0 * nnz;
@@ -197,7 +188,7 @@ int main(int argc, char* argv[]) {
             (m+1) * sizeof(int) + // rows
             (n+m) * sizeof(float)); // vectors
 
-    // display results
+    // print performance
     printf("Platform  Time         Gflops/s    %%peak Gbytes/s     %%peak\n");
     printf("MKL-host % 1.8f  % 2.8f  %02.f   %02.8f   %02.f\n", cpuAvgTimeInSec,
             gflop/cpuAvgTimeInSec, 100.0*gflop/cpuAvgTimeInSec/CPU_GFLOPS,
@@ -205,6 +196,15 @@ int main(int argc, char* argv[]) {
     printf("MKL-mic  % 1.8f  % 2.8f  %02.f   %02.8f   %02.f\n", micAvgTimeInSec,
             gflop/micAvgTimeInSec, 100.0*gflop/micAvgTimeInSec/MIC_GFLOPS,
             gbytes/micAvgTimeInSec, 100.0*gbytes/micAvgTimeInSec/MIC_MEMBW_GBS);
+
+
+    // release memory
+    free(rowptrs);
+    free(colinds);
+    free(vals);
+    free(v);
+    free(mic_answer);
+    free(cpu_answer);
 
     return 0;
 }
