@@ -12,9 +12,9 @@
 
 /* peak processor constants */
 #define CPU_GFLOPS (3.33*6.0)
-#define CPU_MEMBW_GBS (32.0)
+#define CPU_STREAM_GBS (23.9)
 #define MIC_GFLOPS (1.053*60.0)
-#define MIC_MEMBW_GBS (320.0)
+#define MIC_STREAM_GBS (129.7)
 
 /* convenience macros */
 #define ALLOC alloc_if(1) free_if(0)
@@ -188,21 +188,21 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "WARNING: Found %d/%d errors in answer.\n", errors, n);
 
     // calculate total bytes and flops
-    double gflop = 2.e-9 * 2.0 * nnz;
-    double gbytes = 2.e-9 * (
+    double gflop = 1.e-9 * 2.0 * nnz;
+    double gbytes = 1.e-9 * (
             nnz * sizeof(float) + // vals
             nnz * sizeof(int) + // cols
             (m+1) * sizeof(int) + // rows
             (n+m) * sizeof(float)); // vectors
 
     // print performance
-    printf("Platform  Time         Gflops/s    %%peak Gbytes/s     %%peak\n");
-    printf("MKL-host % 1.8f  % 2.8f  %02.f   %02.8f   %02.f\n", cpuAvgTimeInSec,
+    printf("Platform  Time         Gflops/s    %%peak Gbytes/s     %%STREAM\n");
+    printf("MKL-host % 1.8f  % 2.8f  %02.f    %02.8f   %02.f\n", cpuAvgTimeInSec,
             gflop/cpuAvgTimeInSec, 100.0*gflop/cpuAvgTimeInSec/CPU_GFLOPS,
-            gbytes/cpuAvgTimeInSec, 100.0*gbytes/cpuAvgTimeInSec/CPU_MEMBW_GBS);
-    printf("MKL-mic  % 1.8f  % 2.8f  %02.f   %02.8f   %02.f\n", micAvgTimeInSec,
+            gbytes/cpuAvgTimeInSec, 100.0*gbytes/cpuAvgTimeInSec/CPU_STREAM_GBS);
+    printf("MKL-mic  % 1.8f  % 2.8f  %02.f    %02.8f   %02.f\n", micAvgTimeInSec,
             gflop/micAvgTimeInSec, 100.0*gflop/micAvgTimeInSec/MIC_GFLOPS,
-            gbytes/micAvgTimeInSec, 100.0*gbytes/micAvgTimeInSec/MIC_MEMBW_GBS);
+            gbytes/micAvgTimeInSec, 100.0*gbytes/micAvgTimeInSec/MIC_STREAM_GBS);
 
 
     // release memory
