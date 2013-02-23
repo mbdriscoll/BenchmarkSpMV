@@ -124,6 +124,9 @@ int main(int argc, char* argv[]) {
 
     struct timeval start, end;
 
+    // warm cache
+    mkl_scsrgemv((char*)"N", &m, vals, rowptrs, colinds, v, cpu_answer);
+
     double cpuAvgTimeInSec = 0.0;
     for(int i = 0; i < NITER; i++) {
         gettimeofday (&start, NULL);
@@ -135,7 +138,7 @@ int main(int argc, char* argv[]) {
                            (end.tv_usec - start.tv_usec) * 1.e-6;
     }
     cpuAvgTimeInSec /= (double) NITER;
-    
+
     // -----------------------------------------------------------------------
     // Benchmark MKL performance on MIC
 
@@ -148,17 +151,26 @@ int main(int argc, char* argv[]) {
         nocopy(mic_answer:  length(m)   align(64) ALLOC)
     {}
 
+    // warm cache
+    #pragma offload target(mic) \
+        nocopy(rowptrs:    REUSE) \
+        nocopy(colinds:    REUSE) \
+        nocopy(vals:       REUSE) \
+        nocopy(v:          REUSE) \
+        nocopy(mic_answer: REUSE)
+    mkl_scsrgemv((char*)"N", &m, vals, rowptrs, colinds, v, mic_answer);
+
     // do NITER SpMVs with device-resident data
     double micAvgTimeInSec = 0.0;
     for(int i = 0; i < NITER; i++) {
         gettimeofday (&start, NULL);
         {
             #pragma offload target(mic) \
-	        nocopy(rowptrs:    REUSE) \
-	        nocopy(colinds:    REUSE) \
-	        nocopy(vals:       REUSE) \
-	        nocopy(v:          REUSE) \
-	        nocopy(mic_answer: REUSE)
+               nocopy(rowptrs:    REUSE) \
+               nocopy(colinds:    REUSE) \
+               nocopy(vals:       REUSE) \
+               nocopy(v:          REUSE) \
+               nocopy(mic_answer: REUSE)
             mkl_scsrgemv((char*)"N", &m, vals, rowptrs, colinds, v, mic_answer);
         }
         gettimeofday (&end, NULL);
