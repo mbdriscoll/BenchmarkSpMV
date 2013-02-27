@@ -5,7 +5,10 @@
 #include <float.h>
 #include <sys/time.h>
 #include <mkl_spblas.h>
+
+extern "C" {
 #include "extra/mmio.h"
+}
 
 /* number of iterations to yield average performance */
 #define NITER 1000
