@@ -4,8 +4,14 @@
 #include <assert.h>
 #include <float.h>
 #include <sys/time.h>
+
+#include <cuda_runtime.h>
+#include <cusparse_v2.h>
+
+extern "C" {
 #include <mkl_spblas.h>
 #include "extra/mmio.h"
+}
 
 /* number of iterations to yield average performance */
 #define NITER 1000
@@ -87,7 +93,7 @@ void mm_read(char* filename, int *m, int *n, int *nnz,
  */
 float * randvec(int n) {
     float *v = (float*) malloc(n * sizeof(float));
-    for(int i = 0; i < n; i++)
+    for (int i = 0; i < n; i++)
         v[i] = rand() / (float) RAND_MAX;
     return v;
 }
@@ -129,7 +135,7 @@ int main(int argc, char* argv[]) {
     mkl_scsrgemv((char*)"N", &m, vals, rowptrs, colinds, v, cpu_answer);
 
     double cpuAvgTimeInSec = 0.0;
-    for(int i = 0; i < NITER; i++) {
+    for (int i = 0; i < NITER; i++) {
         gettimeofday (&start, NULL);
         {
             mkl_scsrgemv((char*)"N", &m, vals, rowptrs, colinds, v, cpu_answer);
@@ -151,7 +157,8 @@ int main(int argc, char* argv[]) {
     cusparseSetMatType(desc,CUSPARSE_MATRIX_TYPE_GENERAL);
     cusparseSetMatIndexBase(desc,CUSPARSE_INDEX_BASE_ONE);
 
-    float *d_v, *d_gpu_csr_answer, *d_rowptrs, *d_colinds, *d_vals;;
+    float *d_v, *d_gpu_csr_answer, *d_gpu_hyb_answer, *d_vals;
+    int *d_rowptrs, *d_colinds;
     cudaMalloc(&d_v, n*sizeof(float));
     cudaMalloc(&d_gpu_csr_answer, m*sizeof(float));
     cudaMemcpy(d_v, v, n*sizeof(float), cudaMemcpyHostToDevice);
@@ -162,10 +169,10 @@ int main(int argc, char* argv[]) {
           beta = 0.0;
 
     // offload data to device
-    cudaMemcpy(d_v,          n*sizeof(float),   cudaMemcpyHostToDevice);
-    cudaMemcpy(d_rowptrs,    (m+1)*sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_colinds,    nnz*sizeof(int),   cudaMemcpyHostToDevice);
-    cudaMemcpy(d_vals,       nnz*sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_v,          v,       n*sizeof(float),   cudaMemcpyHostToDevice);
+    cudaMemcpy(d_rowptrs,    rowptrs, (m+1)*sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_colinds,    colinds, nnz*sizeof(int),   cudaMemcpyHostToDevice);
+    cudaMemcpy(d_vals,       vals,    nnz*sizeof(float), cudaMemcpyHostToDevice);
 
     // warm cache
     cusparseScsrmv(handle, op, m, n, nnz, &alpha, desc,
@@ -173,7 +180,7 @@ int main(int argc, char* argv[]) {
 
     // do NITER SpMVs with device-resident CSR matrix
     double gpuCsrAvgTimeInSec = 0.0;
-    for(int i = 0; i < NITER; i++) {
+    for (int i = 0; i < NITER; i++) {
         gettimeofday (&start, NULL);
         {
             status = cusparseScsrmv(handle, op, m, n, nnz, &alpha, desc,
@@ -187,13 +194,14 @@ int main(int argc, char* argv[]) {
     gpuCsrAvgTimeInSec /= (double) NITER;
 
     // make hybrid matrix
+    cusparseHybMat_t hyb_matrix;
     cusparseCreateHybMat(&hyb_matrix);
     cusparseScsr2hyb(handle, m, n, desc, d_vals, d_rowptrs, d_colinds, hyb_matrix,
             0, CUSPARSE_HYB_PARTITION_MAX);
 
     // do NITER SpMVs with device-resident CSR matrix
     double gpuHybAvgTimeInSec = 0.0;
-    for(int i = 0; i < NITER; i++) {
+    for (int i = 0; i < NITER; i++) {
         gettimeofday (&start, NULL);
         {
             status = cusparseShybmv(handle, op, &alpha, desc, hyb_matrix,
@@ -222,11 +230,13 @@ int main(int argc, char* argv[]) {
     // Verify and display results
 
     // check the solution
-    int errors = 0;
-    for(int i = 0; i < m; i++) {
-        assert( cpu_answer[i] == gpu_csr_answer[i] );
-        assert( cpu_answer[i] == gpu_hyb_answer[i] );
+    int csr_errors = 0, hyb_errors = 0;
+    for (int i = 0; i < m; i++) {
+        if (cpu_answer[i] != gpu_csr_answer[i]) csr_errors += 1;
+        if (cpu_answer[i] != gpu_hyb_answer[i]) hyb_errors += 1;
     }
+    if (csr_errors != 0) printf("WARNING: found %d/%d errors in CSR solution.\n", csr_errors, m);
+    if (hyb_errors != 0) printf("WARNING: found %d/%d errors in HYB solution.\n", hyb_errors, m);
 
     // calculate total bytes and flops
     double gflop = 1.e-9 * 2.0 * nnz;
@@ -242,11 +252,11 @@ int main(int argc, char* argv[]) {
             gflop/cpuAvgTimeInSec, 100.0*gflop/cpuAvgTimeInSec/CPU_GFLOPS,
             gbytes/cpuAvgTimeInSec, 100.0*gbytes/cpuAvgTimeInSec/CPU_STREAM_GBS);
     printf("cuSPARSE-csr  % 1.8f  % 2.8f  %02.f    %02.8f   %02.f\n", gpuCsrAvgTimeInSec,
-            gflop/gpuCsrAvgTimeInSec, 100.0*gflop/gpuAvgTimeInSec/GPU_GFLOPS,
-            gbytes/gpuCsrAvgTimeInSec, 100.0*gbytes/gpuAvgTimeInSec/GPU_STREAM_GBS);
+            gflop/gpuCsrAvgTimeInSec, 100.0*gflop/gpuCsrAvgTimeInSec/GPU_GFLOPS,
+            gbytes/gpuCsrAvgTimeInSec, 100.0*gbytes/gpuCsrAvgTimeInSec/GPU_STREAM_GBS);
     printf("cuSPARSE-hyb  % 1.8f  % 2.8f  %02.f    %02.8f   %02.f\n", gpuHybAvgTimeInSec,
-            gflop/gpuHybAvgTimeInSec, 100.0*gflop/gpuAvgTimeInSec/GPU_GFLOPS,
-            gbytes/gpuHybAvgTimeInSec, 100.0*gbytes/gpuAvgTimeInSec/GPU_STREAM_GBS);
+            gflop/gpuHybAvgTimeInSec, 100.0*gflop/gpuHybAvgTimeInSec/GPU_GFLOPS,
+            gbytes/gpuHybAvgTimeInSec, 100.0*gbytes/gpuHybAvgTimeInSec/GPU_STREAM_GBS);
 
     // release memory
     free(rowptrs);

@@ -13,7 +13,7 @@ mic: mic.cpp extra/mmio.o
 	$(ICC) $(MIC_CXXFLAGS) $(MIC_LDFLAGS) -o $@ $^
 
 gpu: gpu.cpp extra/mmio.o
-	$(NVCC) $(GPU_CXXFLAGS) $(GPU_LDFALGS) -o $@ $^
+	$(NVCC) $(GPU_CXXFLAGS) $(GPU_LDFLAGS) $^ -o $@
 
 .PHONY: clean
 

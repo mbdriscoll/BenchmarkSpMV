@@ -99,7 +99,7 @@ float * randvec(int n) {
 int main(int argc, char* argv[]) {
     // require filename for matrix to test
     if (argc != 2) {
-        fprintf(stderr, "Usage: %s MATRIX.mm\n", argv[0]);
+        fprintf(stderr, "Usage: %s mm/MATRIX.mm\n", argv[0]);
         exit(1);
     }
 

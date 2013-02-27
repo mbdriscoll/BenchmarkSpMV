@@ -1,3 +1,4 @@
-bench
+gpu
+mic
 *.o
 .*.swp
