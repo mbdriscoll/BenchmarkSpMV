@@ -1,0 +1,1 @@
+This directory contains sample input matrices. However, these matrices are small and do not reflect the ones used in practice. Performance results should be collected on matrices with 10K - 10M rows with 4 - 30 nnz/row.
