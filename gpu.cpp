@@ -17,17 +17,10 @@ extern "C" {
 #define NITER 1000
 
 /* peak processor constants */
-#define CPU_GFLOPS (3.33*6.0)
-#define CPU_STREAM_GBS (23.9)
-#define GPU_GFLOPS (1.053*60.0)
-#define GPU_STREAM_GBS (129.7)
-
-/* convenience macros */
-#define ALLOC alloc_if(1) free_if(0)
-#define FREE  alloc_if(0) free_if(1)
-#define REUSE alloc_if(0) free_if(0)
-#define TEMP  alloc_if(1) free_if(1)
-
+#define CPU_GFLOPS (3.33*6.0) // from tech specs
+#define CPU_STREAM_GBS (23.9) // from STREAM benchmark
+#define GPU_GFLOPS (1312.0200) // from SHOC (maxspflops)
+#define GPU_STREAM_GBS (149.5120) // from SHOC (gmem_readbw)
 
 /**
  * Reads a MatrixMarket file and sets the input pointers
@@ -149,7 +142,7 @@ int main(int argc, char* argv[]) {
     // -----------------------------------------------------------------------
     // Benchmark cuSPARSE performance on GPU
 
-    cusparseHandle_t handle = NULL;
+    cusparseHandle_t handle;
     cusparseCreate(&handle);
 
     cusparseMatDescr_t desc;
@@ -159,9 +152,12 @@ int main(int argc, char* argv[]) {
 
     float *d_v, *d_gpu_csr_answer, *d_gpu_hyb_answer, *d_vals;
     int *d_rowptrs, *d_colinds;
-    cudaMalloc(&d_v, n*sizeof(float));
+    cudaMalloc(&d_v,              n*sizeof(float));
     cudaMalloc(&d_gpu_csr_answer, m*sizeof(float));
-    cudaMemcpy(d_v, v, n*sizeof(float), cudaMemcpyHostToDevice);
+    cudaMalloc(&d_gpu_hyb_answer, m*sizeof(float));
+    cudaMalloc(&d_rowptrs,        (m+1)*sizeof(float));
+    cudaMalloc(&d_colinds,        nnz*sizeof(float));
+    cudaMalloc(&d_vals,           nnz*sizeof(float));
 
     cusparseStatus_t status;
     cusparseOperation_t op = CUSPARSE_OPERATION_NON_TRANSPOSE;
@@ -175,8 +171,9 @@ int main(int argc, char* argv[]) {
     cudaMemcpy(d_vals,       vals,    nnz*sizeof(float), cudaMemcpyHostToDevice);
 
     // warm cache
-    cusparseScsrmv(handle, op, m, n, nnz, &alpha, desc,
+    status = cusparseScsrmv(handle, op, m, n, nnz, &alpha, desc,
             d_vals, d_rowptrs, d_colinds, d_v, &beta, d_gpu_csr_answer);
+    assert(status == CUSPARSE_STATUS_SUCCESS);
 
     // do NITER SpMVs with device-resident CSR matrix
     double gpuCsrAvgTimeInSec = 0.0;
@@ -199,18 +196,24 @@ int main(int argc, char* argv[]) {
     cusparseScsr2hyb(handle, m, n, desc, d_vals, d_rowptrs, d_colinds, hyb_matrix,
             0, CUSPARSE_HYB_PARTITION_MAX);
 
+    // warm cache
+    status = cusparseShybmv(handle, op, &alpha, desc, hyb_matrix,
+            d_v, &beta, d_gpu_hyb_answer);
+    assert(status == CUSPARSE_STATUS_SUCCESS);
+
     // do NITER SpMVs with device-resident CSR matrix
     double gpuHybAvgTimeInSec = 0.0;
     for (int i = 0; i < NITER; i++) {
         gettimeofday (&start, NULL);
         {
-            status = cusparseShybmv(handle, op, &alpha, desc, hyb_matrix,
+            cusparseShybmv(handle, op, &alpha, desc, hyb_matrix,
                     d_v, &beta, d_gpu_hyb_answer);
             cudaThreadSynchronize();
         }
         gettimeofday (&end, NULL);
         gpuHybAvgTimeInSec += (end.tv_sec  - start.tv_sec) +
                            (end.tv_usec - start.tv_usec) * 1.e-6;
+
     }
     gpuHybAvgTimeInSec /= (double) NITER;
 
@@ -232,8 +235,8 @@ int main(int argc, char* argv[]) {
     // check the solution
     int csr_errors = 0, hyb_errors = 0;
     for (int i = 0; i < m; i++) {
-        if (cpu_answer[i] != gpu_csr_answer[i]) csr_errors += 1;
-        if (cpu_answer[i] != gpu_hyb_answer[i]) hyb_errors += 1;
+        if ( fabs(cpu_answer[i]-gpu_csr_answer[i]) > 2*FLT_EPSILON ) csr_errors += 1;
+        if ( fabs(cpu_answer[i]-gpu_hyb_answer[i]) > 2*FLT_EPSILON ) hyb_errors += 1;
     }
     if (csr_errors != 0) printf("WARNING: found %d/%d errors in CSR solution.\n", csr_errors, m);
     if (hyb_errors != 0) printf("WARNING: found %d/%d errors in HYB solution.\n", hyb_errors, m);
