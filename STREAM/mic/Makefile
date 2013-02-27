@@ -1,7 +1,7 @@
 CC = icc
-CFLAGS = -std=c99 -O3 -openmp -mmic -parallel
+CFLAGS = -O3 -openmp -mmic -parallel
 
-PROGRAMS= memcpy
+PROGRAMS= stream
 
 default: $(PROGRAMS)
 
@@ -10,5 +10,5 @@ clean:
 
 run: $(PROGRAMS)
 	export SINK_LD_LIBRARY_PATH=/opt/intel/composer_xe_2013.2.146/compiler/lib/mic/
-	/opt/intel/mic/bin/micnativeloadex memcpy
-	#/opt/intel/mic/bin/micnativeloadex stream
+	#/opt/intel/mic/bin/micnativeloadex memcpy
+	/opt/intel/mic/bin/micnativeloadex stream
